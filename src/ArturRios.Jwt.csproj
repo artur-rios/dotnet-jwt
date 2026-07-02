@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Authors>Artur Rios</Authors>
+    <Company>Artur Rios</Company>
+    <Description>Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT)</Description>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IncludeSymbols>false</IncludeSymbols>
+    <Nullable>enable</Nullable>
+    <PackageId>ArturRios.Jwt</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://artur-rios.github.io/dotnet-jwt/</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>JSON Web Token;JWT;dotnet</PackageTags>
+    <RepositoryUrl>https://github.com/artur-rios/dotnet-jwt</RepositoryUrl>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
+  </ItemGroup>
+</Project>
+

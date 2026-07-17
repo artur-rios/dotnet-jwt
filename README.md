@@ -1,5 +1,9 @@
 ﻿# Dotnet JWT
 
+[![Docs](https://img.shields.io/badge/docs-website-blue)](https://artur-rios.github.io/dotnet-jwt)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![NuGet](https://img.shields.io/nuget/v/ArturRios.Jwt.svg)](https://www.nuget.org/packages/ArturRios.Jwt)
+
 Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET.
 
 ## Requirements

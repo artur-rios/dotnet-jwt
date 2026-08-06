@@ -1,8 +1,10 @@
-+++
-title = "Dotnet JWT"
-+++
-
-# Documentation
+---
+title: Documentation
+linkTitle: Documentation
+weight: 20
+description: >-
+  Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET.
+---
 
 Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET.
 

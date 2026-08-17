@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
@@ -15,11 +15,22 @@ public class JwtHandler
     /// <summary>
     /// Creates a signed JWT (using HMAC-SHA256) from the given configuration.
     /// </summary>
-    /// <param name="configuration">The issuer, audience, expiration, signing secret and claims to embed in the token.</param>
+    /// <remarks>
+    /// Signs with the key <see cref="JwtConfiguration.SigningKeyId"/> names, when it names one, and
+    /// stamps that identifier on the token's <c>kid</c> header so a validator can tell which key to
+    /// check it against. Otherwise signs with <see cref="JwtConfiguration.Secret"/> and writes no
+    /// <c>kid</c>, exactly as it did before rotation was supported.
+    /// </remarks>
+    /// <param name="configuration">The issuer, audience, expiration, signing key and claims to embed in the token.</param>
     /// <returns>The serialized, signed JWT.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="JwtConfiguration.SigningKeyId"/> names a key that is not in
+    /// <see cref="JwtConfiguration.Keys"/>. Signing with a key nothing will accept would produce a
+    /// token that fails on its first use, so it fails here instead, where the cause is visible.
+    /// </exception>
     public string CreateToken(JwtConfiguration configuration)
     {
-        var key = string.IsNullOrWhiteSpace(configuration.Secret) ? [] : Encoding.ASCII.GetBytes(configuration.Secret);
+        var signingKey = ResolveSigningKey(configuration);
 
         var claimsList = configuration.Claims.Select(c => new Claim(c.Key, c.Value)).ToList();
 
@@ -34,8 +45,7 @@ public class JwtHandler
         {
             Issuer = configuration.Issuer,
             Audience = configuration.Audience,
-            SigningCredentials =
-                new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
+            SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256Signature),
             Subject = identity,
             NotBefore = creationDate,
             Expires = expirationDate
@@ -60,26 +70,80 @@ public class JwtHandler
     }
 
     /// <summary>
+    /// Reads the <c>kid</c> header naming the key that signed a JWT, without validating its signature.
+    /// </summary>
+    /// <param name="token">The JWT to read.</param>
+    /// <returns>
+    /// The key identifier, or <see langword="null"/> if the token cannot be read or carries no
+    /// <c>kid</c>.
+    /// </returns>
+    /// <remarks>
+    /// The value is unverified, because reading a header proves nothing about who wrote it. It says
+    /// which key to check the signature against and must not be trusted for anything else.
+    /// </remarks>
+    public string? GetKeyIdFromToken(string token)
+    {
+        if (ReadToken(token) is not JwtSecurityToken jwtToken)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(jwtToken.Header.Kid) ? null : jwtToken.Header.Kid;
+    }
+
+    /// <summary>
     /// Validates a JWT's signature against the given secret.
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
     /// <param name="secret">The secret key expected to have been used to sign the token.</param>
     /// <returns><see langword="true"/> if the token's signature is valid; otherwise, <see langword="false"/>.</returns>
-    public async Task<bool> IsTokenValidAsync(string token, string secret)
+    public Task<bool> IsTokenValidAsync(string token, string secret) =>
+        IsSignatureValidAsync(token, KeyFrom(secret));
+
+    /// <summary>
+    /// Validates a JWT's signature against any of the given keys, so tokens signed with a key that is
+    /// no longer the signing key remain valid until it is withdrawn.
+    /// </summary>
+    /// <param name="token">The JWT to validate.</param>
+    /// <param name="keys">The keys whose signatures are accepted.</param>
+    /// <returns><see langword="true"/> if the token's signature is valid; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// A token carrying a <c>kid</c> is checked against that key alone. An unrecognised <c>kid</c> is
+    /// refused without trying the others: the identifier came from the token, so an unknown one says
+    /// the token was signed by something this configuration does not accept, and trying every key
+    /// anyway would only spend work to reach the same answer.
+    /// </para>
+    /// <para>
+    /// A token carrying no <c>kid</c> is tried against each key in turn. That is what lets a
+    /// deployment adopt rotation without invalidating the tokens it issued before it did.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> IsTokenValidAsync(string token, IEnumerable<JwtKey> keys)
     {
-        var key = string.IsNullOrWhiteSpace(secret) ? [] : Encoding.ASCII.GetBytes(secret);
+        var candidates = keys.ToList();
 
-        var output = await _handler.ValidateTokenAsync(token,
-            new TokenValidationParameters
+        if (candidates.Count == 0)
+        {
+            return false;
+        }
+
+        if (GetKeyIdFromToken(token) is { } keyId)
+        {
+            var named = candidates.FirstOrDefault(key => key.Id == keyId);
+
+            return named is not null && await IsSignatureValidAsync(token, KeyFrom(named.Secret, named.Id));
+        }
+
+        foreach (var key in candidates)
+        {
+            if (await IsSignatureValidAsync(token, KeyFrom(key.Secret, key.Id)))
             {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ClockSkew = TimeSpan.Zero
-            });
+                return true;
+            }
+        }
 
-        return output.IsValid;
+        return false;
     }
 
     /// <summary>
@@ -88,5 +152,54 @@ public class JwtHandler
     private SecurityToken? ReadToken(string token)
     {
         return _handler.CanReadToken(token) ? _handler.ReadToken(token) : null;
+    }
+
+    /// <summary>
+    /// The key a configuration signs with: the one <see cref="JwtConfiguration.SigningKeyId"/> names,
+    /// or <see cref="JwtConfiguration.Secret"/> when it names none.
+    /// </summary>
+    private static SymmetricSecurityKey ResolveSigningKey(JwtConfiguration configuration)
+    {
+        if (string.IsNullOrWhiteSpace(configuration.SigningKeyId))
+        {
+            return KeyFrom(configuration.Secret);
+        }
+
+        var signingKey = configuration.Keys.FirstOrDefault(key => key.Id == configuration.SigningKeyId)
+                         ?? throw new InvalidOperationException(
+                             $"The signing key id '{configuration.SigningKeyId}' names no key in {nameof(JwtConfiguration.Keys)}.");
+
+        return KeyFrom(signingKey.Secret, signingKey.Id);
+    }
+
+    /// <summary>
+    /// Builds the signing key, carrying its identifier when it has one so that
+    /// <see cref="JwtSecurityTokenHandler"/> writes the <c>kid</c> header.
+    /// </summary>
+    /// <remarks>
+    /// ASCII rather than UTF-8, matching what this class has always used. Reading a secret's bytes
+    /// differently would silently invalidate every token signed with a secret outside ASCII, which is
+    /// not a change to make while adding a feature.
+    /// </remarks>
+    private static SymmetricSecurityKey KeyFrom(string secret, string? keyId = null)
+    {
+        var bytes = string.IsNullOrWhiteSpace(secret) ? [] : Encoding.ASCII.GetBytes(secret);
+
+        return new SymmetricSecurityKey(bytes) { KeyId = keyId };
+    }
+
+    private async Task<bool> IsSignatureValidAsync(string token, SecurityKey key)
+    {
+        var output = await _handler.ValidateTokenAsync(token,
+            new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = key,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ClockSkew = TimeSpan.Zero
+            });
+
+        return output.IsValid;
     }
 }

@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
@@ -36,12 +36,10 @@ public class JwtHandler
 
         ClaimsIdentity identity = new(claimsList);
 
-        var creationDate = DateTime.Now;
+        var creationDate = DateTime.UtcNow;
         var expirationDate = creationDate + TimeSpan.FromSeconds(configuration.ExpirationInSeconds);
 
-        JwtSecurityTokenHandler handler = new();
-
-        var token = handler.CreateToken(new SecurityTokenDescriptor
+        var token = _handler.CreateToken(new SecurityTokenDescriptor
         {
             Issuer = configuration.Issuer,
             Audience = configuration.Audience,
@@ -51,14 +49,21 @@ public class JwtHandler
             Expires = expirationDate
         });
 
-        return handler.WriteToken(token);
+        return _handler.WriteToken(token);
     }
 
     /// <summary>
     /// Reads a JWT and extracts the user id from its "id" claim, without validating the token's signature.
     /// </summary>
     /// <param name="token">The JWT to read.</param>
-    /// <returns>The user id from the token's "id" claim, or <see langword="null"/> if the token cannot be read.</returns>
+    /// <returns>
+    /// The user id from the token's "id" claim, or <see langword="null"/> when the token cannot be read,
+    /// carries no "id" claim, or carries one that is not an integer.
+    /// </returns>
+    /// <remarks>
+    /// The value is unverified: reading a claim proves nothing about who wrote it. Validate the token
+    /// first if the id is going to decide anything.
+    /// </remarks>
     public int? GetUserIdFromToken(string token)
     {
         if (ReadToken(token) is not JwtSecurityToken jwtToken)
@@ -66,7 +71,9 @@ public class JwtHandler
             return null;
         }
 
-        return int.Parse(jwtToken.Claims.First(x => x.Type == "id").Value);
+        var claim = jwtToken.Claims.FirstOrDefault(x => x.Type == "id");
+
+        return claim is not null && int.TryParse(claim.Value, out var userId) ? userId : null;
     }
 
     /// <summary>
@@ -92,11 +99,16 @@ public class JwtHandler
     }
 
     /// <summary>
-    /// Validates a JWT's signature against the given secret.
+    /// Validates a JWT's signature and lifetime against the given secret.
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
     /// <param name="secret">The secret key expected to have been used to sign the token.</param>
-    /// <returns><see langword="true"/> if the token's signature is valid; otherwise, <see langword="false"/>.</returns>
+    /// <returns><see langword="true"/> if the token's signature is valid and it has not expired; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// The issuer and the audience are <b>not</b> checked. A token signed with the same secret by a
+    /// different issuer, or minted for a different audience, passes here. Check those claims yourself
+    /// when more than one party holds the secret.
+    /// </remarks>
     public Task<bool> IsTokenValidAsync(string token, string secret) =>
         IsSignatureValidAsync(token, KeyFrom(secret));
 
@@ -106,8 +118,11 @@ public class JwtHandler
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
     /// <param name="keys">The keys whose signatures are accepted.</param>
-    /// <returns><see langword="true"/> if the token's signature is valid; otherwise, <see langword="false"/>.</returns>
+    /// <returns><see langword="true"/> if the token's signature is valid and it has not expired; otherwise, <see langword="false"/>.</returns>
     /// <remarks>
+    /// <para>
+    /// The issuer and the audience are <b>not</b> checked, as with the single-secret overload.
+    /// </para>
     /// <para>
     /// A token carrying a <c>kid</c> is checked against that key alone. An unrecognised <c>kid</c> is
     /// refused without trying the others: the identifier came from the token, so an unknown one says
@@ -149,9 +164,31 @@ public class JwtHandler
     /// <summary>
     /// Reads a JWT without validating its signature, returning <see langword="null"/> if it cannot be read.
     /// </summary>
+    /// <remarks>
+    /// <see cref="JwtSecurityTokenHandler.CanReadToken"/> only checks the shape — three segments separated
+    /// by dots — so it says yes to <c>"a.b.c"</c> and the read that follows then throws on the malformed
+    /// base64url. Since the token is caller input, and the public readers document a <see langword="null"/>
+    /// for anything unreadable, the failure is caught here rather than handed to the caller.
+    /// </remarks>
     private SecurityToken? ReadToken(string token)
     {
-        return _handler.CanReadToken(token) ? _handler.ReadToken(token) : null;
+        if (!_handler.CanReadToken(token))
+        {
+            return null;
+        }
+
+        try
+        {
+            return _handler.ReadToken(token);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (SecurityTokenException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -177,9 +214,17 @@ public class JwtHandler
     /// <see cref="JwtSecurityTokenHandler"/> writes the <c>kid</c> header.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// ASCII rather than UTF-8, matching what this class has always used. Reading a secret's bytes
     /// differently would silently invalidate every token signed with a secret outside ASCII, which is
     /// not a change to make while adding a feature.
+    /// </para>
+    /// <para>
+    /// A consequence worth knowing: <see cref="Encoding.ASCII"/> replaces every character above U+007F
+    /// with <c>?</c>, so a secret drawn from a wider alphabet contributes far less entropy than its
+    /// length suggests, and two such secrets can collapse onto the same key. Keep secrets to printable
+    /// ASCII, and at least 32 bytes of it, which is what HMAC-SHA256 needs.
+    /// </para>
     /// </remarks>
     private static SymmetricSecurityKey KeyFrom(string secret, string? keyId = null)
     {

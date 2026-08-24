@@ -4,6 +4,7 @@ namespace ArturRios.Jwt.Tests;
 /// Covers signing with one key while accepting several — what turns replacing a secret from a
 /// cutover, where every token in flight dies at once, into a rotation.
 /// </summary>
+[Trait("Category", "Unit")]
 public class JwtKeyRotationTests
 {
     private readonly JwtHandler _handler = new();

@@ -1,5 +1,6 @@
 namespace ArturRios.Jwt.Tests;
 
+[Trait("Category", "Unit")]
 public class JwtConfigurationTests
 {
     [Fact]

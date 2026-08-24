@@ -116,7 +116,33 @@ var userId = handler.GetUserIdFromToken(token);
 var keyId = handler.GetKeyIdFromToken(token);
 ```
 
-> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least 32 bytes (256 bits).
+`GetUserIdFromToken` and `GetKeyIdFromToken` read the token without validating it, and return `null`
+for anything they cannot read — an empty string, a token that is not one, a well-shaped token whose
+segments are not valid base64url, a token with no `id` claim, or an `id` that is not an integer. The
+values they return are unverified: validate the token first if either is going to decide anything.
+
+> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least **32 bytes** (256 bits).
+> Secrets are read as **ASCII**, and `Encoding.ASCII` replaces every character above U+007F with `?`, so a
+> secret drawn from a wider alphabet contributes far less entropy than its length suggests. Keep secrets
+> to printable ASCII.
+
+> Note: `IsTokenValidAsync` checks the **signature and the expiry**. It does not check the issuer or the
+> audience, so a token signed with the same secret by a different issuer, or minted for a different
+> audience, passes. Check those claims yourself when more than one party holds the secret.
+
+## Testing
+
+The test suite is xUnit, and every test is named with the Given / When / Then pattern. Every test class
+carries a `Category` trait, so the two kinds can be run — and reported — separately:
+
+```bash
+dotnet test src/ArturRios.Jwt.sln --filter "Category=Unit"
+dotnet test src/ArturRios.Jwt.sln --filter "Category=Functional"
+```
+
+Unit tests exercise the code in isolation against test doubles.
+Functional tests walk the documented three-step key rotation end to end, issuing and validating real tokens at every step.
+CI runs the two as separate jobs, and both must pass before a pull request can be merged.
 
 ## Versioning
 

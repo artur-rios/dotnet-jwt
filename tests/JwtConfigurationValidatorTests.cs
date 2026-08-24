@@ -2,6 +2,7 @@ using FluentValidation.TestHelper;
 
 namespace ArturRios.Jwt.Tests;
 
+[Trait("Category", "Unit")]
 public class JwtConfigurationValidatorTests
 {
     private readonly JwtConfigurationValidator _validator = new();

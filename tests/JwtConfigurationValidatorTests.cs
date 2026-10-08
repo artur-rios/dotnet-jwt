@@ -9,7 +9,7 @@ public class JwtConfigurationValidatorTests
 
     private static JwtConfiguration ValidConfiguration()
     {
-        return new JwtConfiguration(3600, "issuer", "audience", "secret", new Dictionary<string, string> { { "id", "1" } });
+        return new JwtConfiguration(3600, "issuer", "audience", "a-secret-that-is-at-least-32-bytes-long", new Dictionary<string, string> { { "id", "1" } });
     }
 
     [Fact]
@@ -157,6 +157,129 @@ public class JwtConfigurationValidatorTests
         var result = _validator.TestValidate(configuration);
 
         result.ShouldHaveValidationErrorFor(config => config.SigningKeyId);
+    }
+
+    [Fact]
+    public void Given_KeysButNeitherASigningKeyIdNorASecret_When_Validated_Then_HasValidationErrorForSecret()
+    {
+        // Without a SigningKeyId, CreateToken signs with Secret, so a blank one is a configuration
+        // that cannot issue a token. It used to pass validation and throw on the first CreateToken.
+        var configuration = ValidConfiguration() with
+        {
+            Secret = string.Empty,
+            Keys = [new JwtKey("k1", "the-current-signing-key-with-32-bytes++")]
+        };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldHaveValidationErrorFor(config => config.Secret);
+    }
+
+    [Fact]
+    public void Given_KeysAndASigningSecretThatIsNotOneOfThem_When_Validated_Then_HasValidationErrorForSecret()
+    {
+        // The tokens would be signed with a key the configured key set does not accept, so every one
+        // of them would fail validation against Keys — the same mistake SigningKeyId is guarded against.
+        var configuration = ValidConfiguration() with
+        {
+            Keys = [new JwtKey("k1", "the-current-signing-key-with-32-bytes++")]
+        };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldHaveValidationErrorFor(config => config.Secret);
+    }
+
+    [Fact]
+    public void Given_KeysAndASigningSecretThatIsOneOfThem_When_Validated_Then_HasNoValidationErrors()
+    {
+        // A deployment adopting rotation: still signing with its old secret, which is now also a key.
+        var configuration = ValidConfiguration() with
+        {
+            Keys =
+            [
+                new JwtKey("old", ValidConfiguration().Secret),
+                new JwtKey("new", "the-current-signing-key-with-32-bytes++")
+            ]
+        };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void Given_ASecretShorterThan32Bytes_When_Validated_Then_HasValidationErrorForSecret()
+    {
+        // HMAC-SHA256 needs a 256-bit key (RFC 7518 3.2), and the handler refuses to sign with a
+        // short one at all, so such a configuration used to pass here and fail in CreateToken.
+        var configuration = ValidConfiguration() with { Secret = new string('s', 31) };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldHaveValidationErrorFor(config => config.Secret);
+    }
+
+    [Fact]
+    public void Given_ASecretOfExactly32Bytes_When_Validated_Then_HasNoValidationErrors()
+    {
+        var result = _validator.TestValidate(ValidConfiguration() with { Secret = new string('s', 32) });
+
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void Given_AShortSecretThatSignsNothing_When_Validated_Then_ItIsNotChecked()
+    {
+        // With a SigningKeyId the secret is unused, so its length is irrelevant.
+        var configuration = ValidConfiguration() with
+        {
+            Secret = "short",
+            Keys = [new JwtKey("k1", "the-current-signing-key-with-32-bytes++")],
+            SigningKeyId = "k1"
+        };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldNotHaveValidationErrorFor(config => config.Secret);
+    }
+
+    [Fact]
+    public void Given_AKeyWithASecretShorterThan32Bytes_When_Validated_Then_HasValidationErrorForKeys()
+    {
+        var configuration = ValidConfiguration() with
+        {
+            Keys = [new JwtKey("k1", "the-current-signing-key-with-32-bytes++"), new JwtKey("k2", "too-short")],
+            SigningKeyId = "k1"
+        };
+
+        var result = _validator.TestValidate(configuration);
+
+        result.ShouldHaveValidationErrorFor(config => config.Keys);
+    }
+
+    [Fact]
+    public void Given_AConfigurationThatPassesValidation_When_CreatingAToken_Then_ItDoesNotThrow()
+    {
+        // The validator's stated purpose: a configuration it accepts is one that can create a token.
+        var handler = new JwtHandler();
+
+        foreach (var configuration in new[]
+                 {
+                     ValidConfiguration(),
+                     ValidConfiguration() with { Secret = new string('s', 32) },
+                     ValidConfiguration() with
+                     {
+                         Secret = string.Empty,
+                         Keys = [new JwtKey("k1", "the-current-signing-key-with-32-bytes++")],
+                         SigningKeyId = "k1"
+                     }
+                 })
+        {
+            _validator.TestValidate(configuration).ShouldNotHaveAnyValidationErrors();
+
+            Assert.False(string.IsNullOrWhiteSpace(handler.CreateToken(configuration)));
+        }
     }
 
     [Fact]

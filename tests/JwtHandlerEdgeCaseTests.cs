@@ -117,6 +117,71 @@ public class JwtHandlerEdgeCaseTests
         Assert.InRange(read.ValidFrom, DateTime.UtcNow.AddSeconds(-10), DateTime.UtcNow.AddSeconds(10));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GivenABlankSecret_WhenValidating_ThenItIsRejectedRatherThanThrown(string secret)
+    {
+        // A blank secret validates nothing. It used to reach SymmetricSecurityKey, which throws on a
+        // zero-length key, so a missing secret surfaced as an exception on every request.
+        var token = _handler.CreateToken(Configuration(new Dictionary<string, string> { ["id"] = "1" }));
+
+        Assert.False(await _handler.IsTokenValidAsync(token, secret));
+    }
+
+    [Fact]
+    public async Task GivenAKeySetHoldingABlankSecret_WhenValidatingATokenWithNoKeyId_ThenTheOtherKeysAreStillTried()
+    {
+        var token = _handler.CreateToken(Configuration(new Dictionary<string, string> { ["id"] = "1" }));
+
+        Assert.True(await _handler.IsTokenValidAsync(token, [new JwtKey("blank", string.Empty), new JwtKey("k1", Secret)]));
+    }
+
+    [Fact]
+    public async Task GivenATokenNamingAKeyWithABlankSecret_WhenValidating_ThenItIsRejectedRatherThanThrown()
+    {
+        var token = _handler.CreateToken(Configuration(new Dictionary<string, string> { ["id"] = "1" }) with
+        {
+            Keys = [new JwtKey("k1", Secret)],
+            SigningKeyId = "k1"
+        });
+
+        Assert.False(await _handler.IsTokenValidAsync(token, [new JwtKey("k1", " ")]));
+    }
+
+    [Theory]
+    [InlineData(SecurityAlgorithms.HmacSha384)]
+    [InlineData(SecurityAlgorithms.HmacSha512)]
+    public async Task GivenATokenSignedWithTheRightSecretButAnotherAlgorithm_WhenValidating_ThenItIsRejected(string algorithm)
+    {
+        // Tokens are created with HMAC-SHA256 and nothing else, so nothing else is accepted: the
+        // algorithm a token names is attacker-controlled input, and is pinned rather than trusted.
+        var secret = Secret + Secret;
+        var token = CreateTokenSignedWith(secret, algorithm);
+
+        Assert.False(await _handler.IsTokenValidAsync(token, secret));
+        Assert.False(await _handler.IsTokenValidAsync(token, [new JwtKey("k1", secret)]));
+    }
+
+    [Fact]
+    public async Task GivenATokenSignedWithHmacSha256ByAnotherLibrary_WhenValidating_ThenItIsAccepted()
+    {
+        Assert.True(await _handler.IsTokenValidAsync(CreateTokenSignedWith(Secret, SecurityAlgorithms.HmacSha256), Secret));
+    }
+
+    private static string CreateTokenSignedWith(string secret, string algorithm)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secret));
+
+        return handler.WriteToken(handler.CreateToken(new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity([new Claim("id", "1")]),
+            Expires = DateTime.UtcNow.AddMinutes(5),
+            SigningCredentials = new SigningCredentials(key, algorithm)
+        }));
+    }
+
     private static string CreateTokenExpiringAt(DateTime expiresUtc)
     {
         var handler = new JwtSecurityTokenHandler();

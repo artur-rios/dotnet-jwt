@@ -1,7 +1,7 @@
 # Dotnet JWT
 
 [![Docs](https://img.shields.io/badge/docs-website-blue)](https://artur-rios.github.io/dotnet-jwt)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/artur-rios/dotnet-jwt/blob/main/LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/ArturRios.Jwt.svg)](https://www.nuget.org/packages/ArturRios.Jwt)
 
 Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET.
@@ -32,11 +32,11 @@ dotnet add package ArturRios.Jwt
 using ArturRios.Jwt;
 
 var configuration = new JwtConfiguration(
-    expirationInSeconds: 3600,
-    issuer: "my-api",
-    audience: "my-app",
-    secret: "a-secret-key-that-is-at-least-32-bytes-long",
-    claims: new Dictionary<string, string> { { "id", "42" } }
+    ExpirationInSeconds: 3600,
+    Issuer: "my-api",
+    Audience: "my-app",
+    Secret: "a-secret-key-that-is-at-least-32-bytes-long",
+    Claims: new Dictionary<string, string> { { "id", "42" } }
 );
 ```
 
@@ -72,11 +72,11 @@ one takes effect. Supplying `Keys` instead makes it a rotation — one key signs
 
 ```csharp
 var configuration = new JwtConfiguration(
-    expirationInSeconds: 3600,
-    issuer: "my-api",
-    audience: "my-app",
-    secret: string.Empty,
-    claims: new Dictionary<string, string> { { "id", "42" } }
+    ExpirationInSeconds: 3600,
+    Issuer: "my-api",
+    Audience: "my-app",
+    Secret: string.Empty,
+    Claims: new Dictionary<string, string> { { "id", "42" } }
 )
 {
     Keys = [new JwtKey("2026-08", previousSecret), new JwtKey("2026-09", currentSecret)],
@@ -105,7 +105,10 @@ so turning this on does not sign anyone out. The `kid` selects a key and grants 
 signature still decides.
 
 > Note: `Secret` and `Keys` are alternatives. With `Keys` set and `SigningKeyId` naming one of them,
-> `Secret` is unused; without them, everything behaves exactly as it did before this existed.
+> `Secret` is unused; without them, everything behaves exactly as it did before this existed. With `Keys`
+> set but no `SigningKeyId`, tokens are still signed with `Secret` and carry no `kid`, so `Secret` must also
+> be one of the `Keys` — otherwise nothing validating against `Keys` accepts them. `JwtConfigurationValidator`
+> enforces this.
 
 ### Reading the user id from a token
 
@@ -119,63 +122,28 @@ for anything they cannot read — an empty string, a token that is not one, a we
 segments are not valid base64url, a token with no `id` claim, or an `id` that is not an integer. The
 values they return are unverified: validate the token first if either is going to decide anything.
 
-> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least **32 bytes** (256 bits).
+> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least **32 bytes** (256 bits);
+> `JwtConfigurationValidator` rejects a shorter signing secret or key.
 > Secrets are read as **ASCII**, and `Encoding.ASCII` replaces every character above U+007F with `?`, so a
 > secret drawn from a wider alphabet contributes far less entropy than its length suggests. Keep secrets
 > to printable ASCII.
 
 > Note: `IsTokenValidAsync` checks the **signature and the expiry**. It does not check the issuer or the
 > audience, so a token signed with the same secret by a different issuer, or minted for a different
-> audience, passes. Check those claims yourself when more than one party holds the secret.
+> audience, passes. Check those claims yourself when more than one party holds the secret. Only `HS256`
+> signatures are accepted, whatever algorithm the token's header names, and a blank secret (or key)
+> accepts nothing: the method returns `false` rather than throwing.
 
-## Testing
+## Changelog
 
-The test suite is xUnit, and every test is named with the Given / When / Then pattern. Every test class
-carries a `Category` trait, so the two kinds can be run — and reported — separately:
+Notable changes in each release are recorded in [CHANGELOG.md](https://github.com/artur-rios/dotnet-jwt/blob/main/CHANGELOG.md). Releases follow
+[Semantic Versioning](https://semver.org/).
 
-```bash
-dotnet test src/ArturRios.Jwt.sln --filter "Category=Unit"
-dotnet test src/ArturRios.Jwt.sln --filter "Category=Functional"
-```
+## Contributing
 
-Unit tests exercise the code in isolation against test doubles.
-Functional tests walk the documented three-step key rotation end to end, issuing and validating real tokens at every step.
-CI runs the two as separate jobs, and both must pass before a pull request can be merged.
-
-## Branching and releases
-
-`develop` is the integration branch and the base for all new work; `main` only holds released code.
-
-1. Branch off `develop` — `feature/<name>` for features, `fix/<name>` for fixes (`chore/`, `refactor/`, `docs/`,
-   `ci/`, `test/`, `perf/` and `build/` are accepted too) — and open a pull request back into `develop`.
-2. To release, cut `release/<version>` from `develop`, set `<Version>` in `src/ArturRios.Jwt.csproj` to that version
-   and open a pull request into `main`. Only `release/*` branches can be merged into `main`.
-3. Once it is merged, tag the merge commit on `main` with the version. Pushing the tag publishes the package to
-   nuget.org and GitHub Packages:
-
-   ```bash
-   git switch main && git pull
-   git tag <version> && git push origin <version>
-   ```
-
-4. Open a pull request from `main` into `develop` to bring the release back into the integration branch.
-
-Pull requests into `develop` and `main` must pass the tests and the branch policy check. Only the repository owner can
-push version tags, and the publish workflow rejects tags that do not point at a commit on `main`.
-
-## Versioning
-
-Semantic Versioning (SemVer). Breaking changes result in a new major version. New methods or non-breaking behavior
-changes increment the minor version; fixes or tweaks increment the patch.
-
-## Build, test and publish
-
-Use the official [.NET CLI](https://learn.microsoft.com/en-us/dotnet/core/tools/) to build, test and publish the project and Git for source control.
-If you want, optional helper toolsets I built to facilitate these tasks are available:
-
-- [Dotnet Tools](https://github.com/artur-rios/dotnet-tools)
-- [Python Dotnet Tools](https://github.com/artur-rios/python-dotnet-tools)
+Building from source, running the tests, the branching model and the release process are described in
+[CONTRIBUTING.md](https://github.com/artur-rios/dotnet-jwt/blob/main/CONTRIBUTING.md).
 
 ## Legal Details
 
-This project is licensed under the [MIT License](https://en.wikipedia.org/wiki/MIT_License). A copy of the license is available at [LICENSE](./LICENSE) in the repository.
+This project is licensed under the [MIT License](https://en.wikipedia.org/wiki/MIT_License). A copy of the license is available at [LICENSE](https://github.com/artur-rios/dotnet-jwt/blob/main/LICENSE) in the repository.

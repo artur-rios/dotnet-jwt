@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-15
+
 ### Changed
 
 - `JwtConfigurationValidator` rejects every configuration `CreateToken` cannot sign with, or whose tokens the
@@ -60,7 +62,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.2.0...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...HEAD
+[1.3.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.1.0...1.2.0
 [1.1.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/artur-rios/dotnet-jwt/releases/tag/v1.0.0

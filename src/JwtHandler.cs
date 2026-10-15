@@ -10,6 +10,11 @@ namespace ArturRios.Jwt;
 /// </summary>
 public class JwtHandler
 {
+    /// <summary>
+    /// The algorithms a token may name in its <c>alg</c> header: the one <see cref="CreateToken"/> signs with.
+    /// </summary>
+    private static readonly string[] s_validAlgorithms = [SecurityAlgorithms.HmacSha256];
+
     private readonly JwtSecurityTokenHandler _handler = new();
 
     /// <summary>
@@ -103,25 +108,36 @@ public class JwtHandler
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
     /// <param name="secret">The secret key expected to have been used to sign the token.</param>
-    /// <returns><see langword="true"/> if the token's signature is valid and it has not expired; otherwise, <see langword="false"/>.</returns>
+    /// <returns>
+    /// <see langword="true"/> if the token is signed with HMAC-SHA256 under <paramref name="secret"/> and has
+    /// not expired; otherwise — including when <paramref name="secret"/> is blank — <see langword="false"/>.
+    /// </returns>
     /// <remarks>
+    /// <para>
     /// The issuer and the audience are <b>not</b> checked. A token signed with the same secret by a
     /// different issuer, or minted for a different audience, passes here. Check those claims yourself
     /// when more than one party holds the secret.
+    /// </para>
+    /// <para>
+    /// Only HMAC-SHA256 (<c>HS256</c>) is accepted, the one algorithm <see cref="CreateToken"/> signs
+    /// with. The <c>alg</c> header is chosen by whoever wrote the token, so it is pinned rather than
+    /// trusted.
+    /// </para>
     /// </remarks>
     public Task<bool> IsTokenValidAsync(string token, string secret) =>
-        IsSignatureValidAsync(token, KeyFrom(secret));
+        IsSignatureValidAsync(token, secret);
 
     /// <summary>
     /// Validates a JWT's signature against any of the given keys, so tokens signed with a key that is
     /// no longer the signing key remain valid until it is withdrawn.
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
-    /// <param name="keys">The keys whose signatures are accepted.</param>
+    /// <param name="keys">The keys whose signatures are accepted. A key with a blank secret accepts nothing.</param>
     /// <returns><see langword="true"/> if the token's signature is valid and it has not expired; otherwise, <see langword="false"/>.</returns>
     /// <remarks>
     /// <para>
-    /// The issuer and the audience are <b>not</b> checked, as with the single-secret overload.
+    /// The issuer and the audience are <b>not</b> checked, and only HMAC-SHA256 is accepted, as with
+    /// the single-secret overload.
     /// </para>
     /// <para>
     /// A token carrying a <c>kid</c> is checked against that key alone. An unrecognised <c>kid</c> is
@@ -147,12 +163,12 @@ public class JwtHandler
         {
             var named = candidates.FirstOrDefault(key => key.Id == keyId);
 
-            return named is not null && await IsSignatureValidAsync(token, KeyFrom(named.Secret, named.Id));
+            return named is not null && await IsSignatureValidAsync(token, named.Secret, named.Id);
         }
 
         foreach (var key in candidates)
         {
-            if (await IsSignatureValidAsync(token, KeyFrom(key.Secret, key.Id)))
+            if (await IsSignatureValidAsync(token, key.Secret, key.Id))
             {
                 return true;
             }
@@ -233,13 +249,27 @@ public class JwtHandler
         return new SymmetricSecurityKey(bytes) { KeyId = keyId };
     }
 
-    private async Task<bool> IsSignatureValidAsync(string token, SecurityKey key)
+    /// <summary>
+    /// Checks a token's signature and lifetime against one secret.
+    /// </summary>
+    /// <remarks>
+    /// A blank secret is a refusal, not an error: <see cref="SymmetricSecurityKey"/> throws on a
+    /// zero-length key, and the public validators promise a <see langword="false"/> for anything that
+    /// does not validate — a missing secret included.
+    /// </remarks>
+    private async Task<bool> IsSignatureValidAsync(string token, string secret, string? keyId = null)
     {
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            return false;
+        }
+
         var output = await _handler.ValidateTokenAsync(token,
             new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
+                IssuerSigningKey = KeyFrom(secret, keyId),
+                ValidAlgorithms = s_validAlgorithms,
                 ValidateIssuer = false,
                 ValidateAudience = false,
                 ClockSkew = TimeSpan.Zero

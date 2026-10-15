@@ -36,6 +36,18 @@ locale = 'en-us'
   [[module.mounts]]
     source = 'static'
     target = 'static'
+  # Mounting files under assets/ replaces Hugo's default assets mount, so restore it.
+  [[module.mounts]]
+    source = 'assets'
+    target = 'assets'
+  # CHANGELOG.md and CONTRIBUTING.md live at the repository root; the site renders them
+  # (see layouts/_shortcodes/repo-file.html) instead of keeping copies.
+  [[module.mounts]]
+    source = '../CHANGELOG.md'
+    target = 'assets/repo/CHANGELOG.md'
+  [[module.mounts]]
+    source = '../CONTRIBUTING.md'
+    target = 'assets/repo/CONTRIBUTING.md'
 
 [languages]
   [languages.en]
@@ -46,7 +58,7 @@ locale = 'en-us'
       description = "Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET."
 
 [params]
-  copyright.authors = 'Artur Rios | [MIT License](https://github.com/artur-rios/dotnet-jwt/blob/main/LICENSE)'
+  copyright.authors = 'Artur Rios | [Artur Rios Attribution License](https://github.com/artur-rios/dotnet-jwt/blob/main/LICENSE)'
   privacy_policy = ''
   github_repo = 'https://github.com/artur-rios/dotnet-jwt'
   github_branch = 'main'

@@ -43,7 +43,8 @@ public record JwtConfiguration(double ExpirationInSeconds, string Issuer, string
     /// <summary>
     /// The <see cref="JwtKey.Id"/> of the key in <see cref="Keys"/> that signs new tokens, written to
     /// each token's <c>kid</c> header. When empty, tokens are signed with <see cref="Secret"/> and
-    /// carry no <c>kid</c>.
+    /// carry no <c>kid</c> — so with <see cref="Keys"/> set, <see cref="Secret"/> must be the secret of
+    /// one of them, or nothing validating against <see cref="Keys"/> accepts the tokens.
     /// </summary>
     /// <remarks>
     /// Rotating is a change to this property alone: the key it names must already be in

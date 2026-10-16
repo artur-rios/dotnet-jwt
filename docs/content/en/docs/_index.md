@@ -20,9 +20,10 @@ dotnet add package ArturRios.Jwt
 
 ## Features
 
-- Create signed JWTs (HMAC-SHA256) from a `JwtConfiguration`
-- Validate a JWT's signature against a secret, or against a set of keys
+- Create signed JWTs from a `JwtConfiguration`, with HMAC-SHA256 (a shared secret) or ES256 (an EC P-256 private key)
+- Validate a JWT's signature against a secret, or against a set of keys, each key accepting its own algorithm only
 - Rotate signing keys without invalidating the tokens already issued
+- Publish ES256 public keys as a JSON Web Key Set, and read one to validate another issuer's tokens
 - Read the user id from a token's `id` claim, and the `kid` naming the key that signed it
 - Validate a `JwtConfiguration` with [FluentValidation](https://docs.fluentvalidation.net) rules before using it
 
@@ -111,6 +112,67 @@ signature still decides.
 > set but no `SigningKeyId`, tokens are still signed with `Secret` and carry no `kid`, so `Secret` must also
 > be one of the `Keys` — otherwise nothing validating against `Keys` accepts them. `JwtConfigurationValidator`
 > enforces this.
+
+### Signing with ES256
+
+With HS256, every service that validates your tokens holds the secret that signs them, so any of them
+can mint a token the others accept. ES256 splits the key: a private key signs, and its public half,
+which you can publish, validates.
+
+```bash
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out signing-key.pem
+```
+
+```csharp
+var signingKey = JwtKey.FromEcPrivateKeyPem(File.ReadAllText("signing-key.pem"));
+
+var configuration = new JwtConfiguration(
+    ExpirationInSeconds: 3600,
+    Issuer: "my-api",
+    Audience: "my-app",
+    Secret: string.Empty,
+    Claims: new Dictionary<string, string> { { "id", "42" } }
+)
+{
+    Algorithm = JwtAlgorithms.ES256,
+    Keys = [signingKey],
+    SigningKeyId = signingKey.Id
+};
+
+var token = handler.CreateToken(configuration);
+var isValid = await handler.IsTokenValidAsync(token, [signingKey.ToPublicKey()]);
+```
+
+An ES256 key's `Id` is its [RFC 7638](https://www.rfc-editor.org/rfc/rfc7638) thumbprint, so it is
+derived from the key and never configured; tokens carry it as their `kid`. Rotation works as with
+secrets: sign with the new key, keep the old one's public half in `Keys` (`oldKey.ToPublicKey()`) for
+one token lifetime, then drop it.
+
+Each configuration pins one algorithm, and each key validates its own algorithm only — a secret
+HS256, an EC key ES256 — whatever a token's `alg` header says. An HS256 token keyed with your public
+key is therefore refused, and so is a key set that mixes both kinds of key (`IsTokenValidAsync` throws
+`ArgumentException` for one).
+
+### Publishing and reading the public keys (JWKS)
+
+```csharp
+// The issuer, e.g. behind GET /.well-known/jwks.json
+var json = JwksDocument.From(configuration.Keys.Select(key => key.ToPublicKey()));
+
+// A service validating that issuer's tokens
+var keys = JwksDocument.Parse(json);
+var isValid = await handler.IsTokenValidAsync(token, keys);
+```
+
+`From` writes public halves only and refuses an HS256 secret. `Parse` reads EC P-256 signing keys and
+skips any entry it cannot use safely: one that is not an EC P-256 signing key, whose `kid` is not its
+thumbprint, or that carries a private part (`d`) — a published private part means the key is
+compromised, so it is never trusted. It returns each key once, skipping an entry whose id repeats an
+earlier one, and skips an entry it cannot decode, such as one with invalid escapes. A document that is
+not a key set (not JSON, or not an object with a `keys` array) throws `FormatException`. Cache the
+parsed keys, and fetch the set again — at most once a minute — when a token names a `kid` you do not
+know. `JwtKey.ToSecurityKey()` gives Microsoft.IdentityModel's form of a key, for validators that use it
+directly; pair each key with its own `Algorithm` only.
 
 ### Reading the user id from a token
 

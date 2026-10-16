@@ -164,6 +164,14 @@ var keys = JwksDocument.Parse(json);
 var isValid = await handler.IsTokenValidAsync(token, keys);
 ```
 
+> Warning: a valid signature says only that the issuer signed the token, not which audience or purpose
+> it was signed for. `IsTokenValidAsync` checks the signature and the expiry, so a service verifying an
+> issuer's key set must also check `iss` and `aud`, plus any token-type claim the issuer defines, before
+> it trusts the token: one signing key may sign several kinds of token, such as a user's session token
+> and a short-lived challenge, and every one of them validates against the same key set. Read those
+> claims from the token once it validates, or hand the keys' `ToSecurityKey()` forms to a validator such
+> as JwtBearer with issuer and audience validation on.
+
 `From` writes public halves only and refuses an HS256 secret. `Parse` reads EC P-256 signing keys and
 skips any entry it cannot use safely: one that is not an EC P-256 signing key, whose `kid` is not its
 thumbprint, or that carries a private part (`d`) — a published private part means the key is
@@ -187,17 +195,18 @@ for anything they cannot read — an empty string, a token that is not one, a we
 segments are not valid base64url, a token with no `id` claim, or an `id` that is not an integer. The
 values they return are unverified: validate the token first if either is going to decide anything.
 
-> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least **32 bytes** (256 bits);
-> `JwtConfigurationValidator` rejects a shorter signing secret or key.
+> Note: each configuration pins one algorithm, `HS256` or `ES256`, and each key validates its own
+> algorithm only — a secret HS256, an EC key ES256 — whatever algorithm the token's header names; an
+> unsigned token is never accepted. HS256 signs with HMAC-SHA256, which requires a secret of at least
+> **32 bytes** (256 bits); `JwtConfigurationValidator` rejects a shorter signing secret or key.
 > Secrets are read as **ASCII**, and `Encoding.ASCII` replaces every character above U+007F with `?`, so a
 > secret drawn from a wider alphabet contributes far less entropy than its length suggests. Keep secrets
 > to printable ASCII.
 
-> Note: `IsTokenValidAsync` checks the **signature and the expiry**. It does not check the issuer or the
-> audience, so a token signed with the same secret by a different issuer, or minted for a different
-> audience, passes. Check those claims yourself when more than one party holds the secret. Only `HS256`
-> signatures are accepted, whatever algorithm the token's header names, and a blank secret (or key)
-> accepts nothing: the method returns `false` rather than throwing.
+> Note: `IsTokenValidAsync` checks the **signature and the expiry** only, with either overload and either
+> kind of key. It never checks the issuer or the audience, so a token signed with the same key by a
+> different issuer, or minted for a different audience, passes: check those claims yourself. A blank
+> secret (or key) accepts nothing: the method returns `false` rather than throwing.
 
 ## Legal Details
 

@@ -15,6 +15,10 @@ namespace ArturRios.Jwt;
 /// Leaving <see cref="Keys"/> empty behaves exactly as it did before the property existed, so
 /// nothing changes for a configuration that does not use it.
 /// </para>
+/// <para>
+/// <see cref="Algorithm"/> pins one algorithm per configuration. An HS256 configuration holds secrets;
+/// an ES256 one holds EC P-256 keys, named by their thumbprints, and signs with one that has its private half.
+/// </para>
 /// </remarks>
 /// <param name="ExpirationInSeconds">The number of seconds after creation for which the token remains valid.</param>
 /// <param name="Issuer">The party that issues the token.</param>
@@ -52,4 +56,15 @@ public record JwtConfiguration(double ExpirationInSeconds, string Issuer, string
     /// accepted everywhere before anything starts signing with it.
     /// </remarks>
     public string? SigningKeyId { get; init; }
+
+    /// <summary>
+    /// The algorithm tokens are signed with, and the only one the configuration's keys may hold:
+    /// <see cref="JwtAlgorithms.HS256"/>, the default, or <see cref="JwtAlgorithms.ES256"/>.
+    /// </summary>
+    /// <remarks>
+    /// An ES256 configuration signs with the private key <see cref="SigningKeyId"/> names in
+    /// <see cref="Keys"/>, and leaves <see cref="Secret"/> empty. Leaving this property alone keeps a
+    /// configuration exactly as it was before ES256 existed.
+    /// </remarks>
+    public string Algorithm { get; init; } = JwtAlgorithms.HS256;
 }

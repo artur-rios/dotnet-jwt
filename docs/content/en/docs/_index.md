@@ -20,9 +20,10 @@ dotnet add package ArturRios.Jwt
 
 ## Features
 
-- Create signed JWTs (HMAC-SHA256) from a `JwtConfiguration`
-- Validate a JWT's signature against a secret, or against a set of keys
+- Create signed JWTs from a `JwtConfiguration`, with HMAC-SHA256 (a shared secret) or ES256 (an EC P-256 private key)
+- Validate a JWT's signature against a secret, or against a set of keys, each key accepting its own algorithm only
 - Rotate signing keys without invalidating the tokens already issued
+- Publish ES256 public keys as a JSON Web Key Set, and read one to validate another issuer's tokens
 - Read the user id from a token's `id` claim, and the `kid` naming the key that signed it
 - Validate a `JwtConfiguration` with [FluentValidation](https://docs.fluentvalidation.net) rules before using it
 
@@ -112,6 +113,78 @@ signature still decides.
 > be one of the `Keys` — otherwise nothing validating against `Keys` accepts them. `JwtConfigurationValidator`
 > enforces this.
 
+### Signing with ES256
+
+With HS256, every service that validates your tokens holds the secret that signs them, so any of them
+can mint a token the others accept. ES256 splits the key: a private key signs, and its public half,
+which you can publish, validates.
+
+```bash
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out signing-key.pem
+```
+
+```csharp
+var signingKey = JwtKey.FromEcPrivateKeyPem(File.ReadAllText("signing-key.pem"));
+
+var configuration = new JwtConfiguration(
+    ExpirationInSeconds: 3600,
+    Issuer: "my-api",
+    Audience: "my-app",
+    Secret: string.Empty,
+    Claims: new Dictionary<string, string> { { "id", "42" } }
+)
+{
+    Algorithm = JwtAlgorithms.ES256,
+    Keys = [signingKey],
+    SigningKeyId = signingKey.Id
+};
+
+var token = handler.CreateToken(configuration);
+var isValid = await handler.IsTokenValidAsync(token, [signingKey.ToPublicKey()]);
+```
+
+An ES256 key's `Id` is its [RFC 7638](https://www.rfc-editor.org/rfc/rfc7638) thumbprint, so it is
+derived from the key and never configured; tokens carry it as their `kid`. Rotation works as with
+secrets: sign with the new key, keep the old one's public half in `Keys` (`oldKey.ToPublicKey()`) for
+one token lifetime, then drop it.
+
+Each configuration pins one algorithm, and each key validates its own algorithm only — a secret
+HS256, an EC key ES256 — whatever a token's `alg` header says. An HS256 token keyed with your public
+key is therefore refused, and so is a key set that mixes both kinds of key (`IsTokenValidAsync` throws
+`ArgumentException` for one).
+
+### Publishing and reading the public keys (JWKS)
+
+```csharp
+// The issuer, e.g. behind GET /.well-known/jwks.json
+var json = JwksDocument.From(configuration.Keys.Select(key => key.ToPublicKey()));
+
+// A service validating that issuer's tokens
+var keys = JwksDocument.Parse(json);
+var isValid = await handler.IsTokenValidAsync(token, keys);
+```
+
+> Warning: a valid signature says only that the issuer signed the token, not which audience or purpose
+> it was signed for. `IsTokenValidAsync` checks the signature and the expiry, so a service verifying an
+> issuer's key set must also check `iss` and `aud`, plus any token-type claim the issuer defines, before
+> it trusts the token: one signing key may sign several kinds of token, such as a user's session token
+> and a short-lived challenge, and every one of them validates against the same key set. Read those
+> claims from the token once it validates, or hand the keys' `ToSecurityKey()` forms to a validator such
+> as JwtBearer with issuer and audience validation on.
+
+`From` writes public halves only. It refuses an HS256 secret, a `null` key, and a key whose id is not
+its thumbprint, such as one renamed with `with { Id = ... }`, since `Parse` would drop that entry.
+`Parse` reads EC P-256 signing keys and
+skips any entry it cannot use safely: one that is not an EC P-256 signing key, whose `kid` is not its
+thumbprint, or that carries a private part (`d`) — a published private part means the key is
+compromised, so it is never trusted. It returns each key once, skipping an entry whose id repeats an
+earlier one, and skips an entry it cannot decode, such as one holding a lone surrogate escape (`\uD800`). A document that is
+not a key set (not JSON, or not an object with a `keys` array) throws `FormatException`, and so does the same
+undecodable text in the key set's own member names, e.g. `{"keys":[],"\uD800":1}`. Cache the
+parsed keys, and fetch the set again — at most once a minute — when a token names a `kid` you do not
+know. `JwtKey.ToSecurityKey()` gives Microsoft.IdentityModel's form of a key, for validators that use it
+directly; pair each key with its own `Algorithm` only.
+
 ### Reading the user id from a token
 
 ```csharp
@@ -124,17 +197,18 @@ for anything they cannot read — an empty string, a token that is not one, a we
 segments are not valid base64url, a token with no `id` claim, or an `id` that is not an integer. The
 values they return are unverified: validate the token first if either is going to decide anything.
 
-> Note: tokens are signed with HMAC-SHA256, which requires a secret of at least **32 bytes** (256 bits);
-> `JwtConfigurationValidator` rejects a shorter signing secret or key.
+> Note: each configuration pins one algorithm, `HS256` or `ES256`, and each key validates its own
+> algorithm only — a secret HS256, an EC key ES256 — whatever algorithm the token's header names; an
+> unsigned token is never accepted. HS256 signs with HMAC-SHA256, which requires a secret of at least
+> **32 bytes** (256 bits); `JwtConfigurationValidator` rejects a shorter signing secret or key.
 > Secrets are read as **ASCII**, and `Encoding.ASCII` replaces every character above U+007F with `?`, so a
 > secret drawn from a wider alphabet contributes far less entropy than its length suggests. Keep secrets
 > to printable ASCII.
 
-> Note: `IsTokenValidAsync` checks the **signature and the expiry**. It does not check the issuer or the
-> audience, so a token signed with the same secret by a different issuer, or minted for a different
-> audience, passes. Check those claims yourself when more than one party holds the secret. Only `HS256`
-> signatures are accepted, whatever algorithm the token's header names, and a blank secret (or key)
-> accepts nothing: the method returns `false` rather than throwing.
+> Note: `IsTokenValidAsync` checks the **signature and the expiry** only, with either overload and either
+> kind of key. It never checks the issuer or the audience, so a token signed with the same key by a
+> different issuer, or minted for a different audience, passes: check those claims yourself. A blank
+> secret (or key) accepts nothing: the method returns `false` rather than throwing.
 
 ## Legal Details
 

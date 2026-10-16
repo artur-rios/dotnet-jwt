@@ -10,32 +10,36 @@ namespace ArturRios.Jwt;
 /// </summary>
 public class JwtHandler
 {
-    /// <summary>
-    /// The algorithms a token may name in its <c>alg</c> header: the one <see cref="CreateToken"/> signs with.
-    /// </summary>
-    private static readonly string[] s_validAlgorithms = [SecurityAlgorithms.HmacSha256];
-
     private readonly JwtSecurityTokenHandler _handler = new();
 
     /// <summary>
-    /// Creates a signed JWT (using HMAC-SHA256) from the given configuration.
+    /// Creates a signed JWT from the given configuration, with the algorithm it names: HMAC-SHA256 by
+    /// default, or ES256.
     /// </summary>
     /// <remarks>
-    /// Signs with the key <see cref="JwtConfiguration.SigningKeyId"/> names, when it names one, and
-    /// stamps that identifier on the token's <c>kid</c> header so a validator can tell which key to
-    /// check it against. Otherwise signs with <see cref="JwtConfiguration.Secret"/> and writes no
+    /// <para>
+    /// <b>HS256.</b> Signs with the key <see cref="JwtConfiguration.SigningKeyId"/> names, when it names
+    /// one, and stamps that identifier on the token's <c>kid</c> header so a validator can tell which key
+    /// to check it against. Otherwise signs with <see cref="JwtConfiguration.Secret"/> and writes no
     /// <c>kid</c>, exactly as it did before rotation was supported.
+    /// </para>
+    /// <para>
+    /// <b>ES256.</b> Signs with the private key <see cref="JwtConfiguration.SigningKeyId"/> names in
+    /// <see cref="JwtConfiguration.Keys"/>, and stamps its thumbprint on the <c>kid</c> header.
+    /// </para>
     /// </remarks>
-    /// <param name="configuration">The issuer, audience, expiration, signing key and claims to embed in the token.</param>
+    /// <param name="configuration">The issuer, audience, expiration, algorithm, signing key and claims to embed in the token.</param>
     /// <returns>The serialized, signed JWT.</returns>
     /// <exception cref="InvalidOperationException">
-    /// <see cref="JwtConfiguration.SigningKeyId"/> names a key that is not in
-    /// <see cref="JwtConfiguration.Keys"/>. Signing with a key nothing will accept would produce a
-    /// token that fails on its first use, so it fails here instead, where the cause is visible.
+    /// <see cref="JwtConfiguration.SigningKeyId"/> names a key that is not in <see cref="JwtConfiguration.Keys"/>,
+    /// names a key of the other algorithm, or — for ES256 — names nothing or a key without its private half; or
+    /// <see cref="JwtConfiguration.Algorithm"/> is neither HS256 nor ES256. Signing with a key nothing will
+    /// accept would produce a token that fails on its first use, so it fails here instead, where the cause is
+    /// visible.
     /// </exception>
     public string CreateToken(JwtConfiguration configuration)
     {
-        var signingKey = ResolveSigningKey(configuration);
+        var credentials = ResolveSigningCredentials(configuration);
 
         var claimsList = configuration.Claims.Select(c => new Claim(c.Key, c.Value)).ToList();
 
@@ -48,7 +52,7 @@ public class JwtHandler
         {
             Issuer = configuration.Issuer,
             Audience = configuration.Audience,
-            SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256Signature),
+            SigningCredentials = credentials,
             Subject = identity,
             NotBefore = creationDate,
             Expires = expirationDate
@@ -119,9 +123,8 @@ public class JwtHandler
     /// when more than one party holds the secret.
     /// </para>
     /// <para>
-    /// Only HMAC-SHA256 (<c>HS256</c>) is accepted, the one algorithm <see cref="CreateToken"/> signs
-    /// with. The <c>alg</c> header is chosen by whoever wrote the token, so it is pinned rather than
-    /// trusted.
+    /// Only HMAC-SHA256 (<c>HS256</c>) is accepted. The <c>alg</c> header is chosen by whoever wrote the
+    /// token, so it is pinned rather than trusted.
     /// </para>
     /// </remarks>
     public Task<bool> IsTokenValidAsync(string token, string secret) =>
@@ -132,12 +135,18 @@ public class JwtHandler
     /// no longer the signing key remain valid until it is withdrawn.
     /// </summary>
     /// <param name="token">The JWT to validate.</param>
-    /// <param name="keys">The keys whose signatures are accepted. A key with a blank secret accepts nothing.</param>
+    /// <param name="keys">
+    /// The keys whose signatures are accepted: HS256 secrets, or ES256 keys (public halves suffice), never
+    /// both. A key with a blank secret accepts nothing.
+    /// </param>
     /// <returns><see langword="true"/> if the token's signature is valid and it has not expired; otherwise, <see langword="false"/>.</returns>
     /// <remarks>
     /// <para>
-    /// The issuer and the audience are <b>not</b> checked, and only HMAC-SHA256 is accepted, as with
-    /// the single-secret overload.
+    /// The issuer and the audience are <b>not</b> checked, as with the single-secret overload.
+    /// </para>
+    /// <para>
+    /// Each key validates its own algorithm only — a secret HS256, an EC key ES256 — whatever the
+    /// token's <c>alg</c> header names, so an HS256 token keyed with a published public key is refused.
     /// </para>
     /// <para>
     /// A token carrying a <c>kid</c> is checked against that key alone. An unrecognised <c>kid</c> is
@@ -150,6 +159,10 @@ public class JwtHandler
     /// deployment adopt rotation without invalidating the tokens it issued before it did.
     /// </para>
     /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="keys"/> mixes HS256 and ES256 keys. A key set validates one algorithm; validate
+    /// against each set separately.
+    /// </exception>
     public async Task<bool> IsTokenValidAsync(string token, IEnumerable<JwtKey> keys)
     {
         var candidates = keys.ToList();
@@ -159,16 +172,24 @@ public class JwtHandler
             return false;
         }
 
+        if (candidates.Any(key => key.IsAsymmetric) && candidates.Any(key => !key.IsAsymmetric))
+        {
+            throw new ArgumentException(
+                $"The key set mixes {JwtAlgorithms.HS256} and {JwtAlgorithms.ES256} keys. A key set validates one " +
+                "algorithm: validate against each set separately.",
+                nameof(keys));
+        }
+
         if (GetKeyIdFromToken(token) is { } keyId)
         {
             var named = candidates.FirstOrDefault(key => key.Id == keyId);
 
-            return named is not null && await IsSignatureValidAsync(token, named.Secret, named.Id);
+            return named is not null && await IsSignatureValidAsync(token, named);
         }
 
         foreach (var key in candidates)
         {
-            if (await IsSignatureValidAsync(token, key.Secret, key.Id))
+            if (await IsSignatureValidAsync(token, key))
             {
                 return true;
             }
@@ -207,26 +228,72 @@ public class JwtHandler
         }
     }
 
+    /// <summary>The credentials a configuration signs with, for the algorithm it names.</summary>
+    private static SigningCredentials ResolveSigningCredentials(JwtConfiguration configuration) =>
+        configuration.Algorithm switch
+        {
+            JwtAlgorithms.HS256 => new SigningCredentials(ResolveSecretSigningKey(configuration),
+                SecurityAlgorithms.HmacSha256Signature),
+            JwtAlgorithms.ES256 => new SigningCredentials(ResolveEcSigningKey(configuration).ToSecurityKey(),
+                SecurityAlgorithms.EcdsaSha256),
+            _ => throw new InvalidOperationException(
+                $"'{configuration.Algorithm}' is not an algorithm this library signs with. Use " +
+                $"'{JwtAlgorithms.HS256}' or '{JwtAlgorithms.ES256}'.")
+        };
+
     /// <summary>
-    /// The key a configuration signs with: the one <see cref="JwtConfiguration.SigningKeyId"/> names,
+    /// The HS256 key a configuration signs with: the one <see cref="JwtConfiguration.SigningKeyId"/> names,
     /// or <see cref="JwtConfiguration.Secret"/> when it names none.
     /// </summary>
-    private static SymmetricSecurityKey ResolveSigningKey(JwtConfiguration configuration)
+    private static SymmetricSecurityKey ResolveSecretSigningKey(JwtConfiguration configuration)
     {
         if (string.IsNullOrWhiteSpace(configuration.SigningKeyId))
         {
             return KeyFrom(configuration.Secret);
         }
 
-        var signingKey = configuration.Keys.FirstOrDefault(key => key.Id == configuration.SigningKeyId)
-                         ?? throw new InvalidOperationException(
-                             $"The signing key id '{configuration.SigningKeyId}' names no key in {nameof(JwtConfiguration.Keys)}.");
+        var signingKey = NamedSigningKey(configuration);
+
+        if (signingKey.IsAsymmetric)
+        {
+            throw new InvalidOperationException(
+                $"The signing key '{signingKey.Id}' is an {JwtAlgorithms.ES256} key, but the configuration's " +
+                $"{nameof(JwtConfiguration.Algorithm)} is {JwtAlgorithms.HS256}. Set it to {JwtAlgorithms.ES256} to sign with that key.");
+        }
 
         return KeyFrom(signingKey.Secret, signingKey.Id);
     }
 
+    /// <summary>The ES256 private key a configuration signs with: the one <see cref="JwtConfiguration.SigningKeyId"/> names.</summary>
+    private static JwtKey ResolveEcSigningKey(JwtConfiguration configuration)
+    {
+        if (string.IsNullOrWhiteSpace(configuration.SigningKeyId))
+        {
+            throw new InvalidOperationException(
+                $"An {JwtAlgorithms.ES256} configuration signs with the key '{nameof(JwtConfiguration.SigningKeyId)}' " +
+                $"names in '{nameof(JwtConfiguration.Keys)}', and none is named.");
+        }
+
+        var signingKey = NamedSigningKey(configuration);
+
+        if (!signingKey.IsAsymmetric || !signingKey.CanSign)
+        {
+            throw new InvalidOperationException(
+                $"The signing key '{signingKey.Id}' is not an {JwtAlgorithms.ES256} private key. An {JwtAlgorithms.ES256} " +
+                $"configuration signs with a key from '{nameof(JwtConfiguration.Keys)}' that holds its private half.");
+        }
+
+        return signingKey;
+    }
+
+    /// <summary>The key <see cref="JwtConfiguration.SigningKeyId"/> names in <see cref="JwtConfiguration.Keys"/>.</summary>
+    private static JwtKey NamedSigningKey(JwtConfiguration configuration) =>
+        configuration.Keys.FirstOrDefault(key => key.Id == configuration.SigningKeyId)
+        ?? throw new InvalidOperationException(
+            $"The signing key id '{configuration.SigningKeyId}' names no key in {nameof(JwtConfiguration.Keys)}.");
+
     /// <summary>
-    /// Builds the signing key, carrying its identifier when it has one so that
+    /// Builds the HS256 signing key, carrying its identifier when it has one so that
     /// <see cref="JwtSecurityTokenHandler"/> writes the <c>kid</c> header.
     /// </summary>
     /// <remarks>
@@ -249,6 +316,12 @@ public class JwtHandler
         return new SymmetricSecurityKey(bytes) { KeyId = keyId };
     }
 
+    /// <summary>Checks a token against one key, under that key's algorithm and no other.</summary>
+    private Task<bool> IsSignatureValidAsync(string token, JwtKey key) =>
+        key.IsAsymmetric
+            ? IsValidUnderAsync(token, key.ToSecurityKey(), SecurityAlgorithms.EcdsaSha256)
+            : IsSignatureValidAsync(token, key.Secret, key.Id);
+
     /// <summary>
     /// Checks a token's signature and lifetime against one secret.
     /// </summary>
@@ -264,12 +337,18 @@ public class JwtHandler
             return false;
         }
 
+        return await IsValidUnderAsync(token, KeyFrom(secret, keyId), SecurityAlgorithms.HmacSha256);
+    }
+
+    /// <summary>Checks a token's signature, under exactly one algorithm, and its lifetime.</summary>
+    private async Task<bool> IsValidUnderAsync(string token, SecurityKey key, string algorithm)
+    {
         var output = await _handler.ValidateTokenAsync(token,
             new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = KeyFrom(secret, keyId),
-                ValidAlgorithms = s_validAlgorithms,
+                IssuerSigningKey = key,
+                ValidAlgorithms = [algorithm],
                 ValidateIssuer = false,
                 ValidateAudience = false,
                 ClockSkew = TimeSpan.Zero

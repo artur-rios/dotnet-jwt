@@ -7,6 +7,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-16
+
+### Added
+
+- ES256 (ECDSA P-256 with SHA-256) beside HS256. `JwtKey.FromEcPrivateKeyPem` reads a P-256 private key from a
+  PEM, `JwtKey.FromEcPublicJwk` builds a verification key from a JWK's `x` and `y`, and `ToPublicKey` drops the
+  private half. An EC key's `Id` is its RFC 7638 thumbprint (`Thumbprint`), derived and never configured.
+- `JwtConfiguration.Algorithm`: `JwtAlgorithms.HS256`, the default, or `JwtAlgorithms.ES256`. An ES256
+  configuration signs with the private key `SigningKeyId` names in `Keys`, and its tokens carry that key's
+  thumbprint as `kid`.
+- `JwksDocument.From(keys)` writes a JSON Web Key Set holding only public halves, refusing a key whose id is not
+  its thumbprint, and `JwksDocument.Parse(json)` reads one into verification keys. `Parse` skips entries that
+  are not EC P-256 signing keys, whose `kid` is not their thumbprint, or that carry a private part (`d`), since a
+  published private part means the key is compromised. It returns each key once, skipping an entry whose id
+  repeats an earlier one, and skips an entry it cannot decode, such as one holding a lone surrogate escape
+  (`\uD800`). A document that is not a key set throws `FormatException`, and so does the same undecodable text in
+  the key set's own member names.
+- `JwtKey.Algorithm`, `IsAsymmetric`, `CanSign` and `ToSecurityKey()`.
+
+### Changed
+
+- `JwtConfigurationValidator` holds a configuration to its `Algorithm`: an HS256 one may not hold an EC key, and
+  an ES256 one must hold EC keys only, each named by its thumbprint, sign with one that has its private half, and
+  leave `Secret` empty. HS256 configurations validate exactly as before.
+
+### Security
+
+- Each key validates its own algorithm only — an EC key ES256, a secret HS256 — whatever the token's `alg` header
+  says, so an HS256 token keyed with a published public key, or an unsigned one, is refused.
+  `IsTokenValidAsync(token, keys)` throws `ArgumentException` for a key set that mixes the two kinds.
+
 ## [1.3.0] - 2026-10-15
 
 ### Changed
@@ -62,7 +93,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.1.0...1.2.0
 [1.1.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.0.0...v1.1.0

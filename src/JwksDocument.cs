@@ -9,8 +9,8 @@ namespace ArturRios.Jwt;
 /// </summary>
 /// <remarks>
 /// Every member written is a fixed ASCII name or a base64url value (a coordinate, or an id that is a
-/// thumbprint), so the default <see cref="Utf8JsonWriter"/> encoder, which escapes <c>+ &lt; &gt; &amp; '</c>
-/// and non-ASCII characters, never changes any of them.
+/// thumbprint, since <see cref="From"/> refuses any other id), so the default <see cref="Utf8JsonWriter"/>
+/// encoder, which escapes <c>+ &lt; &gt; &amp; '</c> and non-ASCII characters, never changes any of them.
 /// </remarks>
 public static class JwksDocument
 {
@@ -29,17 +29,39 @@ public static class JwksDocument
     /// <c>crv</c>, <c>x</c>, <c>y</c>, <c>kid</c> (the key's id), <c>use</c> (<c>sig</c>) and <c>alg</c>
     /// (<c>ES256</c>) for each. A private half is never written, whether the key holds one or not.
     /// </summary>
-    /// <exception cref="ArgumentException">A key is an HS256 secret, which has no public half to publish.</exception>
+    /// <remarks>
+    /// A key's id must be its RFC 7638 <see cref="JwtKey.Thumbprint"/>, as it is for every key read with
+    /// <see cref="JwtKey.FromEcPrivateKeyPem"/> or <see cref="JwtKey.FromEcPublicJwk"/>. One renamed with a
+    /// <see langword="with"/> expression is refused rather than published, because <see cref="Parse"/>, and
+    /// any consumer that checks thumbprints, would silently drop it.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// A key is <see langword="null"/>; a key is an HS256 secret, which has no public half to publish; or a
+    /// key's id is not its thumbprint. The message never names the key.
+    /// </exception>
     public static string From(IEnumerable<JwtKey> keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
 
         var published = keys.ToList();
 
+        if (published.Any(key => key is null))
+        {
+            throw new ArgumentException("The keys to publish include a null key.", nameof(keys));
+        }
+
         if (published.Any(key => !key.IsAsymmetric))
         {
             throw new ArgumentException(
                 $"An {JwtAlgorithms.HS256} key is a shared secret with no public half: a key set publishes {JwtAlgorithms.ES256} keys only.",
+                nameof(keys));
+        }
+
+        if (published.Any(key => key.Id != key.Thumbprint))
+        {
+            throw new ArgumentException(
+                "A key's id is not its RFC 7638 thumbprint, so a key set reader would drop it. Publish keys as " +
+                $"{nameof(JwtKey.FromEcPrivateKeyPem)} or {nameof(JwtKey.FromEcPublicJwk)} name them.",
                 nameof(keys));
         }
 

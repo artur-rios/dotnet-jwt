@@ -54,6 +54,27 @@ public class JwksDocumentTests
     }
 
     [Fact]
+    public void GivenAKeyRenamedAwayFromItsThumbprint_WhenPublished_ThenItIsRefusedWithoutEchoingIt()
+    {
+        var renamed = TestKeys.NewEs256Key() with { Id = "renamed" };
+
+        var refusal = Assert.Throws<ArgumentException>(() => JwksDocument.From([TestKeys.NewEs256Key(), renamed]));
+
+        Assert.Equal("keys", refusal.ParamName);
+        Assert.DoesNotContain("renamed", refusal.Message);
+        Assert.DoesNotContain(renamed.PublicX!, refusal.Message);
+        Assert.DoesNotContain(renamed.Thumbprint!, refusal.Message);
+    }
+
+    [Fact]
+    public void GivenANullKey_WhenPublished_ThenItIsRefusedAsAnArgument()
+    {
+        var refusal = Assert.Throws<ArgumentException>(() => JwksDocument.From([TestKeys.NewEs256Key(), null!]));
+
+        Assert.Equal("keys", refusal.ParamName);
+    }
+
+    [Fact]
     public void GivenNoKeys_WhenPublished_ThenTheSetIsEmpty()
     {
         Assert.Equal("{\"keys\":[]}", JwksDocument.From([]));

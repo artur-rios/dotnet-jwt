@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Security.Cryptography;
 
 namespace ArturRios.Jwt.Tests;
 
@@ -10,6 +11,18 @@ namespace ArturRios.Jwt.Tests;
 public class P256Tests
 {
     private static byte[] Decode(string value) => Base64Url.DecodeFromChars(value);
+
+    [Fact]
+    public void GivenTheNistP256Curve_WhenChecked_ThenItIsNamedP256()
+    {
+        Assert.True(P256.IsNamed(ECCurve.NamedCurves.nistP256));
+    }
+
+    [Fact]
+    public void GivenTheNistP384Curve_WhenChecked_ThenItIsNotNamedP256()
+    {
+        Assert.False(P256.IsNamed(ECCurve.NamedCurves.nistP384));
+    }
 
     [Fact]
     public void GivenTheRfc7515AppendixA3Point_WhenChecked_ThenItIsOnTheCurve()

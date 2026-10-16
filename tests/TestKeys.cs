@@ -54,4 +54,7 @@ internal static class TestKeys
 
         return key.ExportPkcs8PrivateKeyPem();
     }
+
+    /// <summary>A new ES256 signing key.</summary>
+    public static JwtKey NewEs256Key() => JwtKey.FromEcPrivateKeyPem(NewP256Pem());
 }

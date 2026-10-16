@@ -172,7 +172,9 @@ var isValid = await handler.IsTokenValidAsync(token, keys);
 > claims from the token once it validates, or hand the keys' `ToSecurityKey()` forms to a validator such
 > as JwtBearer with issuer and audience validation on.
 
-`From` writes public halves only and refuses an HS256 secret. `Parse` reads EC P-256 signing keys and
+`From` writes public halves only. It refuses an HS256 secret, a `null` key, and a key whose id is not
+its thumbprint, such as one renamed with `with { Id = ... }`, since `Parse` would drop that entry.
+`Parse` reads EC P-256 signing keys and
 skips any entry it cannot use safely: one that is not an EC P-256 signing key, whose `kid` is not its
 thumbprint, or that carries a private part (`d`) — a published private part means the key is
 compromised, so it is never trusted. It returns each key once, skipping an entry whose id repeats an

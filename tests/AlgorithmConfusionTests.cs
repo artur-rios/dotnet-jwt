@@ -65,9 +65,34 @@ public class AlgorithmConfusionTests
     }
 
     [Fact]
+    public void GivenTheUnsignedTokenTheHelperBuilds_WhenRead_ThenItIsAReadableTokenNamingAlgNone()
+    {
+        // Positive control: without it, the unsigned-token refusal could pass because the token is unreadable.
+        var handler = new JwtSecurityTokenHandler();
+        var token = Unsigned(s_ecKey.Id);
+
+        Assert.True(handler.CanReadToken(token));
+
+        var read = handler.ReadJwtToken(token);
+
+        Assert.Equal("none", read.Header.Alg);
+        Assert.Equal(s_ecKey.Id, read.Header.Kid);
+        Assert.Equal("42", read.Payload["id"]);
+    }
+
+    [Fact]
     public async Task GivenAnHs256TokenKeyedWithThePublicKeyPem_WhenValidatedAgainstTheEcKey_ThenItIsRefused()
     {
         var forged = Hs256(Encoding.ASCII.GetBytes(PublicPem()), s_ecKey.Id);
+
+        Assert.False(await _handler.IsTokenValidAsync(forged, [s_ecKey.ToPublicKey()]));
+    }
+
+    [Fact]
+    public async Task GivenAnHs256TokenKeyedWithThePublicKeyPemAndNoKid_WhenValidatedAgainstTheEcKey_ThenItIsRefused()
+    {
+        // No kid, so the handler tries every key in turn rather than the one a kid names.
+        var forged = Hs256(Encoding.ASCII.GetBytes(PublicPem()), keyId: null);
 
         Assert.False(await _handler.IsTokenValidAsync(forged, [s_ecKey.ToPublicKey()]));
     }

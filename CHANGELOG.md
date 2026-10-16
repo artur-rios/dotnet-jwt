@@ -19,7 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reads one into verification keys. `Parse` skips entries that are not EC P-256 signing keys, whose `kid` is not
   their thumbprint, or that carry a private part (`d`), since a published private part means the key is
   compromised. It returns each key once, skipping an entry whose id repeats an earlier one, and skips an entry it
-  cannot decode, such as one with invalid escapes. A document that is not a key set throws `FormatException`.
+  cannot decode, such as one holding a lone surrogate escape (`\uD800`). A document that is not a key set throws
+  `FormatException`, and so does the same undecodable text in the key set's own member names.
 - `JwtKey.Algorithm`, `IsAsymmetric`, `CanSign` and `ToSecurityKey()`.
 
 ### Changed

@@ -168,8 +168,9 @@ var isValid = await handler.IsTokenValidAsync(token, keys);
 skips any entry it cannot use safely: one that is not an EC P-256 signing key, whose `kid` is not its
 thumbprint, or that carries a private part (`d`) — a published private part means the key is
 compromised, so it is never trusted. It returns each key once, skipping an entry whose id repeats an
-earlier one, and skips an entry it cannot decode, such as one with invalid escapes. A document that is
-not a key set (not JSON, or not an object with a `keys` array) throws `FormatException`. Cache the
+earlier one, and skips an entry it cannot decode, such as one holding a lone surrogate escape (`\uD800`). A document that is
+not a key set (not JSON, or not an object with a `keys` array) throws `FormatException`, and so does the same
+undecodable text in the key set's own member names, e.g. `{"keys":[],"\uD800":1}`. Cache the
 parsed keys, and fetch the set again — at most once a minute — when a token names a `kid` you do not
 know. `JwtKey.ToSecurityKey()` gives Microsoft.IdentityModel's form of a key, for validators that use it
 directly; pair each key with its own `Algorithm` only.

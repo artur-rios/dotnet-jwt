@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-16
+
 ### Added
 
 - ES256 (ECDSA P-256 with SHA-256) beside HS256. `JwtKey.FromEcPrivateKeyPem` reads a P-256 private key from a
@@ -91,7 +93,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.1.0...1.2.0
 [1.1.0]: https://github.com/artur-rios/dotnet-jwt/compare/v1.0.0...v1.1.0

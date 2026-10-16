@@ -72,12 +72,34 @@ public class JwksDocumentTests
     }
 
     [Fact]
-    public void GivenTheRfc7515KeyWithItsPrivateScalar_WhenParsed_ThenOnlyThePublicHalfIsRead()
+    public void GivenAnEntryPublishingItsPrivateScalar_WhenParsed_ThenTheEntryIsSkipped()
     {
-        var parsed = Assert.Single(JwksDocument.Parse(Entry(Rfc7515Entry($",\"d\":\"{TestKeys.Rfc7515D}\""))));
+        Assert.Empty(JwksDocument.Parse(Entry(Rfc7515Entry($",\"d\":\"{TestKeys.Rfc7515D}\""))));
+    }
 
-        Assert.Equal(TestKeys.Rfc7515Thumbprint, parsed.Id);
-        Assert.False(parsed.CanSign);
+    [Fact]
+    public void GivenTheSameKeyTwice_WhenParsed_ThenItIsReturnedOnce()
+    {
+        var parsed = JwksDocument.Parse(Entry($"{Rfc7515Entry()},{Rfc7515Entry()}"));
+
+        Assert.Equal(TestKeys.Rfc7515Thumbprint, Assert.Single(parsed).Id);
+    }
+
+    [Theory]
+    [InlineData("{\"kty\":\"\\uD800\"}")]
+    [InlineData("{\"\\uD800\":1}")]
+    [InlineData("{\"kty\":\"EC\",\"\\uD800\":1}")]
+    public void GivenAnEntryWithAnUndecodableSurrogate_WhenParsed_ThenItIsSkipped(string entry)
+    {
+        var parsed = JwksDocument.Parse(Entry($"{entry},{Rfc7515Entry()}"));
+
+        Assert.Equal(TestKeys.Rfc7515Thumbprint, Assert.Single(parsed).Id);
+    }
+
+    [Fact]
+    public void GivenAnUndecodableMemberNameBesideTheKeys_WhenParsed_ThenItIsRefused()
+    {
+        Assert.Throws<FormatException>(() => JwksDocument.Parse("{\"keys\":[],\"\\uD800\":1}"));
     }
 
     [Theory]

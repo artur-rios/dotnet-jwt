@@ -21,6 +21,7 @@ public static class JwksDocument
     private const string Kid = "kid";
     private const string Use = "use";
     private const string Alg = "alg";
+    private const string PrivateScalar = "d";
     private const string Signature = "sig";
 
     /// <summary>
@@ -85,8 +86,14 @@ public static class JwksDocument
     /// publish keys for other uses, and a key that cannot be used safely must not validate anything.
     /// </para>
     /// <para>
-    /// Only public halves are read. A <c>d</c> published by mistake is ignored, so a parsed key can
-    /// verify but never sign.
+    /// An entry that carries a <c>d</c> member is skipped too: a published private part means the key is
+    /// compromised, and trusting its public half would accept anyone's forgeries. Each key is returned
+    /// once; a later entry with the same id (the thumbprint, so the same key) is skipped. A parsed key
+    /// can verify but never sign.
+    /// </para>
+    /// <para>
+    /// Text that JSON accepts but cannot be decoded, such as a lone surrogate escape in a name or value,
+    /// skips its entry, or is a <see cref="FormatException"/> when it is in the key set's own members.
     /// </para>
     /// </remarks>
     /// <exception cref="FormatException">The text is not JSON, or not an object with a <c>keys</c> array.</exception>
@@ -109,9 +116,21 @@ public static class JwksDocument
         {
             var root = document.RootElement;
 
-            if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("keys", out var entries) ||
-                entries.ValueKind != JsonValueKind.Array)
+            var entries = default(JsonElement);
+            var isKeySet = false;
+
+            try
+            {
+                isKeySet = root.ValueKind == JsonValueKind.Object &&
+                           root.TryGetProperty("keys", out entries) &&
+                           entries.ValueKind == JsonValueKind.Array;
+            }
+            catch (InvalidOperationException)
+            {
+                throw new FormatException("The key set has a member name that is not valid text.");
+            }
+
+            if (!isKeySet)
             {
                 throw new FormatException("A key set is a JSON object with a \"keys\" array.");
             }
@@ -120,7 +139,7 @@ public static class JwksDocument
 
             foreach (var entry in entries.EnumerateArray())
             {
-                if (TryRead(entry) is { } key)
+                if (TryRead(entry) is { } key && keys.All(read => read.Id != key.Id))
                 {
                     keys.Add(key);
                 }
@@ -133,7 +152,20 @@ public static class JwksDocument
     /// <summary>The verification key an entry describes, or <see langword="null"/> when it is not one to use.</summary>
     private static JwtKey? TryRead(JsonElement entry)
     {
+        try
+        {
+            return ReadEntry(entry);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static JwtKey? ReadEntry(JsonElement entry)
+    {
         if (entry.ValueKind != JsonValueKind.Object ||
+            entry.TryGetProperty(PrivateScalar, out _) ||
             Required(entry, Kty) != "EC" ||
             Required(entry, Crv) != P256.JwkCurveName ||
             !OptionalIs(entry, Use, Signature) ||

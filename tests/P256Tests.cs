@@ -43,6 +43,34 @@ public class P256Tests
     }
 
     [Fact]
+    public void GivenAYShorterThan32BytesThatStillEncodesAPointOnTheCurve_WhenChecked_ThenThePointIsRefused()
+    {
+        var x = Decode(TestKeys.LeadingZeroYX);
+        var y = Decode(TestKeys.LeadingZeroY);
+
+        // y's first byte is zero, so its last 31 bytes are the same number: only the length check refuses it.
+        Assert.True(P256.IsOnCurve(x, y));
+        Assert.Equal(0, y[0]);
+        Assert.False(P256.IsOnCurve(x, y[1..]));
+    }
+
+    [Fact]
+    public void GivenAnXOf33BytesThatStillEncodesAPointOnTheCurve_WhenChecked_ThenThePointIsRefused()
+    {
+        byte[] x = [0, .. Decode(TestKeys.Rfc7515X)];
+
+        Assert.False(P256.IsOnCurve(x, Decode(TestKeys.Rfc7515Y)));
+    }
+
+    [Fact]
+    public void GivenAYOf33BytesThatStillEncodesAPointOnTheCurve_WhenChecked_ThenThePointIsRefused()
+    {
+        byte[] y = [0, .. Decode(TestKeys.Rfc7515Y)];
+
+        Assert.False(P256.IsOnCurve(Decode(TestKeys.Rfc7515X), y));
+    }
+
+    [Fact]
     public void GivenCoordinatesAtOrAboveTheFieldPrime_WhenChecked_ThenThePointIsRefused()
     {
         var allOnes = Enumerable.Repeat((byte)0xFF, 32).ToArray();

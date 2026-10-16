@@ -34,6 +34,15 @@ internal static class TestKeys
     /// <summary>The example key's y with its last bit flipped: not a point on P-256.</summary>
     public const string OffCurveY = "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5aw";
 
+    /// <summary>
+    /// The x coordinate of a P-256 point, generated once, whose y (<see cref="LeadingZeroY"/>) begins with a
+    /// zero byte, so that y's last 31 bytes encode the same number.
+    /// </summary>
+    public const string LeadingZeroYX = "1_FEp4lmnWUqnsGWNYfMt-sIPCNeNeBqKz7bi_kKoUs";
+
+    /// <summary>The y coordinate of the point <see cref="LeadingZeroYX"/> begins; its first byte is zero.</summary>
+    public const string LeadingZeroY = "ACLikgTtpi2CRhYK_RZ7M3mA1CdOWu9nZewrYoWe9Jc";
+
     /// <summary>A new P-256 private key as a PKCS#8 PEM, what <c>openssl genpkey</c> writes.</summary>
     public static string NewP256Pem()
     {

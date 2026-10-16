@@ -103,6 +103,9 @@ public class EcJwtKeyTests
     [InlineData("P-384")]
     [InlineData("RSA")]
     [InlineData("public key")]
+    [InlineData("encrypted")]
+    [InlineData("two keys")]
+    [InlineData("explicit P-256")]
     [InlineData("garbage")]
     public void GivenAPemThatIsNotAP256PrivateKey_WhenRead_ThenItIsRefusedWithoutEchoingIt(string kind)
     {
@@ -182,6 +185,23 @@ public class EcJwtKeyTests
                 using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
                 return key.ExportSubjectPublicKeyInfoPem();
+            }
+            case "encrypted":
+            {
+                using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+                return key.ExportEncryptedPkcs8PrivateKeyPem("passphrase",
+                    new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1));
+            }
+            case "two keys":
+                return TestKeys.NewP256Pem() + TestKeys.NewP256Pem();
+            case "explicit P-256":
+            {
+                // P-256 itself, but spelled out as explicit curve parameters rather than named by its OID.
+                using var named = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+                using var key = ECDsa.Create(named.ExportExplicitParameters(includePrivateParameters: true));
+
+                return key.ExportPkcs8PrivateKeyPem();
             }
             default:
                 return "-----BEGIN PRIVATE KEY-----\nbm90LWEta2V5\n-----END PRIVATE KEY-----\n";

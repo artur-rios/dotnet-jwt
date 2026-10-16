@@ -23,16 +23,28 @@ internal static class JwkThumbprint
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
-
-            foreach (var (name, value) in requiredMembers.OrderBy(member => member.Key, StringComparer.Ordinal))
-            {
-                writer.WriteString(name, value);
-            }
-
+            WriteMembers(writer, requiredMembers.OrderBy(member => member.Key, StringComparer.Ordinal));
             writer.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>
+    /// Writes string members into the object the writer has open, in the order given. Shared with the
+    /// key set writer so a JWK is serialized by one piece of code.
+    /// </summary>
+    /// <remarks>
+    /// Every name is a fixed ASCII JWK member name and every value is base64url or a fixed ASCII word, so
+    /// the writer's default encoder, which escapes <c>+ &lt; &gt; &amp; '</c> and non-ASCII characters,
+    /// never changes them, and RFC 7638's unescaped serialization is what is hashed.
+    /// </remarks>
+    internal static void WriteMembers(Utf8JsonWriter writer, IEnumerable<KeyValuePair<string, string>> members)
+    {
+        foreach (var (name, value) in members)
+        {
+            writer.WriteString(name, value);
+        }
     }
 
     /// <summary>The thumbprint of a key given by its required members.</summary>

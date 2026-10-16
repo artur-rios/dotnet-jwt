@@ -10,8 +10,6 @@ namespace ArturRios.Jwt.Tests;
 [Trait("Category", "Unit")]
 public class EcJwtKeyTests
 {
-    private const string Secret = "the-current-signing-key-with-32-bytes++";
-
     [Fact]
     public void GivenTheRfc7515PrivateKey_WhenReadFromPem_ThenItIsAnEs256SigningKeyNamedByItsThumbprint()
     {
@@ -87,7 +85,7 @@ public class EcJwtKeyTests
     [Fact]
     public void GivenTwoSecretKeysWithTheSameIdAndSecret_WhenCompared_ThenTheyAreEqualAsBefore()
     {
-        Assert.Equal(new JwtKey("k1", Secret), new JwtKey("k1", Secret));
+        Assert.Equal(new JwtKey("k1", TestKeys.Secret), new JwtKey("k1", TestKeys.Secret));
     }
 
     [Fact]
@@ -143,7 +141,7 @@ public class EcJwtKeyTests
     [Fact]
     public void GivenASecretKey_WhenInspected_ThenItIsAnHs256KeyWithNoThumbprint()
     {
-        var key = new JwtKey("k1", Secret);
+        var key = new JwtKey("k1", TestKeys.Secret);
 
         Assert.Equal(JwtAlgorithms.HS256, key.Algorithm);
         Assert.False(key.IsAsymmetric);
@@ -154,7 +152,7 @@ public class EcJwtKeyTests
     [Fact]
     public void GivenASecretKey_WhenItsPublicHalfIsAskedFor_ThenItIsRefused()
     {
-        Assert.Throws<InvalidOperationException>(() => new JwtKey("k1", Secret).ToPublicKey());
+        Assert.Throws<InvalidOperationException>(() => new JwtKey("k1", TestKeys.Secret).ToPublicKey());
     }
 
     [Fact]

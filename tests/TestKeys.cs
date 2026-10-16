@@ -57,4 +57,20 @@ internal static class TestKeys
 
     /// <summary>A new ES256 signing key.</summary>
     public static JwtKey NewEs256Key() => JwtKey.FromEcPrivateKeyPem(NewP256Pem());
+
+    /// <summary>A secret of exactly 32 bytes, the shortest HMAC-SHA256 accepts.</summary>
+    public const string Secret = "the-current-signing-key-with-32-bytes++";
+
+    /// <summary>A valid ES256 configuration signing with <paramref name="signingKey"/>, or with a new key.</summary>
+    public static JwtConfiguration Es256Configuration(JwtKey? signingKey = null)
+    {
+        var key = signingKey ?? NewEs256Key();
+
+        return new JwtConfiguration(3600, "issuer", "audience", string.Empty, new Dictionary<string, string> { { "id", "1" } })
+        {
+            Algorithm = JwtAlgorithms.ES256,
+            Keys = [key],
+            SigningKeyId = key.Id
+        };
+    }
 }

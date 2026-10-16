@@ -327,7 +327,7 @@ public class JwtConfigurationValidatorTests
         // the configuration could believe it mattered.
         var result = _validator.TestValidate(TestKeys.Es256Configuration() with { Secret = "a-secret-that-is-at-least-32-bytes-long" });
 
-        result.ShouldHaveValidationErrorFor(config => config.Secret);
+        result.ShouldHaveValidationErrorFor(config => config.Secret).WithErrorMessage("'Secret' must be empty in an ES256 configuration, which signs with a private key from 'Keys'.");
     }
 
     [Fact]
@@ -335,7 +335,7 @@ public class JwtConfigurationValidatorTests
     {
         var result = _validator.TestValidate(TestKeys.Es256Configuration() with { SigningKeyId = null });
 
-        result.ShouldHaveValidationErrorFor(config => config.SigningKeyId);
+        result.ShouldHaveValidationErrorFor(config => config.SigningKeyId).WithErrorMessage("An ES256 configuration signs with the key 'SigningKeyId' names, so it is required.");
     }
 
     [Fact]
@@ -347,7 +347,7 @@ public class JwtConfigurationValidatorTests
             Keys = [current, new JwtKey("k1", TestKeys.Secret)]
         };
 
-        _validator.TestValidate(configuration).ShouldHaveValidationErrorFor(config => config.Keys);
+        _validator.TestValidate(configuration).ShouldHaveValidationErrorFor(config => config.Keys).WithErrorMessage("An ES256 configuration accepts only ES256 keys: every key in 'Keys' must be an EC P-256 key.");
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public class JwtConfigurationValidatorTests
             Keys = [new JwtKey("k1", ValidConfiguration().Secret), TestKeys.NewEs256Key()]
         };
 
-        _validator.TestValidate(configuration).ShouldHaveValidationErrorFor(config => config.Keys);
+        _validator.TestValidate(configuration).ShouldHaveValidationErrorFor(config => config.Keys).WithErrorMessage("An HS256 configuration accepts only HS256 keys, but 'Keys' holds an ES256 key. Set 'Algorithm' to ES256, or keep the two kinds of key in separate configurations.");
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public class JwtConfigurationValidatorTests
     {
         var result = _validator.TestValidate(TestKeys.Es256Configuration(TestKeys.NewEs256Key().ToPublicKey()));
 
-        result.ShouldHaveValidationErrorFor(config => config.SigningKeyId);
+        result.ShouldHaveValidationErrorFor(config => config.SigningKeyId).WithErrorMessage("The key 'SigningKeyId' names must hold its private half: a public key validates tokens but cannot sign them.");
     }
 
     [Fact]
@@ -377,7 +377,7 @@ public class JwtConfigurationValidatorTests
         // The kid is derived, never configured: a renamed key would sign tokens no published key set names.
         var renamed = TestKeys.NewEs256Key() with { Id = "current" };
 
-        _validator.TestValidate(TestKeys.Es256Configuration(renamed)).ShouldHaveValidationErrorFor(config => config.Keys);
+        _validator.TestValidate(TestKeys.Es256Configuration(renamed)).ShouldHaveValidationErrorFor(config => config.Keys).WithErrorMessage("Every ES256 key in 'Keys' must have its RFC 7638 thumbprint as its id.");
     }
 
     [Fact]

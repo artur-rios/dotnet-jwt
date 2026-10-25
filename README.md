@@ -1,8 +1,10 @@
 # Dotnet JWT
 
-[![Docs](https://img.shields.io/badge/docs-website-blue)](https://artur-rios.github.io/dotnet-jwt)
+[![Docs](https://img.shields.io/badge/docs-website-blue)](https://docs.artur-rios.tech/dotnet-jwt)
 [![License: Attribution](https://img.shields.io/badge/License-Attribution-blue.svg)](https://github.com/artur-rios/dotnet-jwt/blob/main/LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/ArturRios.Jwt.svg)](https://www.nuget.org/packages/ArturRios.Jwt)
+
+This repository lives at <https://git.techcraftsmen.net/artur-rios/dotnet-jwt>. The GitHub repository is a read-only mirror of it.
 
 Provides a clean, minimal API for creating, validating and reading JSON Web Tokens (JWT) in .NET.
 

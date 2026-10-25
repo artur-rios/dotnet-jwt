@@ -14,7 +14,7 @@
     <Nullable>enable</Nullable>
     <PackageId>ArturRios.Jwt</PackageId>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageProjectUrl>https://artur-rios.github.io/dotnet-jwt/</PackageProjectUrl>
+    <PackageProjectUrl>https://docs.artur-rios.tech/dotnet-jwt/</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>JSON Web Token;JWT;dotnet</PackageTags>
     <RepositoryUrl>https://github.com/artur-rios/dotnet-jwt</RepositoryUrl>

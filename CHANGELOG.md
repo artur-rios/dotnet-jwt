@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-14
+
+### Changed
+
+- `FluentValidation` updated from 12.1.1 to 12.2.0 and `System.IdentityModel.Tokens.Jwt` from 8.22.0 to
+  8.23.0.
+
 ## [1.4.1] - 2026-10-29
 
 ### Changed
@@ -100,7 +107,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.1...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.2...HEAD
+[1.4.2]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.1...1.4.2
 [1.4.1]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.0...1.4.1
 [1.4.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.2.0...1.3.0

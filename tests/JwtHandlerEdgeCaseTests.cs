@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ArturRios.Jwt.Tests;
@@ -82,6 +83,7 @@ public class JwtHandlerEdgeCaseTests
     [Fact]
     public async Task GivenAnExpiredToken_WhenValidating_ThenItIsRejected()
     {
+        // Written by another library, at real time, so it covers a token this handler did not issue.
         var token = CreateTokenExpiringAt(DateTime.UtcNow.AddMinutes(-5));
 
         Assert.False(await _handler.IsTokenValidAsync(token, Secret));
@@ -116,12 +118,14 @@ public class JwtHandlerEdgeCaseTests
     [Fact]
     public void GivenAToken_WhenCreated_ThenItsLifetimeIsExpressedInUtc()
     {
-        var token = _handler.CreateToken(Configuration(new Dictionary<string, string> { ["id"] = "1" }, 60));
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var handler = new JwtHandler(new FakeTimeProvider(new DateTimeOffset(now)));
+        var token = handler.CreateToken(Configuration(new Dictionary<string, string> { ["id"] = "1" }, 60));
 
         var read = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
-        Assert.InRange(read.ValidTo, DateTime.UtcNow.AddSeconds(50), DateTime.UtcNow.AddSeconds(70));
-        Assert.InRange(read.ValidFrom, DateTime.UtcNow.AddSeconds(-10), DateTime.UtcNow.AddSeconds(10));
+        Assert.Equal(now, read.ValidFrom);
+        Assert.Equal(now.AddSeconds(60), read.ValidTo);
     }
 
     [Theory]

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -112,13 +113,16 @@ public class Es256HandlerTests
     public async Task GivenAnExpiredEs256Token_WhenValidated_ThenItIsRefused()
     {
         var key = TestKeys.NewEs256Key();
-        var (notBefore, expires) = TestTokens.EndedAgo(TimeSpan.FromSeconds(2));
-        var token = TestTokens.Es256(key, notBefore, expires);
-        var live = TestTokens.Es256(key, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
+        var handler = new JwtHandler(clock);
+        var token = handler.CreateToken(Es256(key) with { ExpirationInSeconds = 60 });
 
-        Assert.Equal(key.Id, _handler.GetKeyIdFromToken(token));
-        Assert.True(await _handler.IsTokenValidAsync(live, [key.ToPublicKey()]));
-        Assert.False(await _handler.IsTokenValidAsync(token, [key.ToPublicKey()]));
+        Assert.Equal(key.Id, handler.GetKeyIdFromToken(token));
+        Assert.True(await handler.IsTokenValidAsync(token, [key.ToPublicKey()]));
+
+        clock.Advance(TimeSpan.FromSeconds(62));
+
+        Assert.False(await handler.IsTokenValidAsync(token, [key.ToPublicKey()]));
     }
 
     [Fact]

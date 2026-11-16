@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `JwtHandler(TimeProvider)`: a handler that reads the time from the given clock, to issue tokens (`nbf`, `iat`,
+  `exp`) and to judge their lifetime when validating, still with no clock skew. A test can pass a fake clock, such
+  as `FakeTimeProvider`, to pin when a token starts or let it expire without waiting. `new JwtHandler()` reads the
+  system clock, as before.
+
 ## [1.4.2] - 2026-11-14
 
 ### Changed

@@ -25,6 +25,7 @@ dotnet add package ArturRios.Jwt
 - Rotate signing keys without invalidating the tokens already issued
 - Publish ES256 public keys as a JSON Web Key Set, and read one to validate another issuer's tokens
 - Read the user id from a token's `id` claim, and the `kid` naming the key that signed it
+- Take the time from a `TimeProvider`, so tests can issue and expire tokens on a fake clock
 - Validate a `JwtConfiguration` with [FluentValidation](https://docs.fluentvalidation.net) rules before using it
 
 ## Usage
@@ -66,6 +67,25 @@ var token = handler.CreateToken(configuration);
 
 ```csharp
 var isValid = await handler.IsTokenValidAsync(token, configuration.Secret);
+```
+
+### Supplying a clock
+
+`JwtHandler` reads the time from a `System.TimeProvider`: `TimeProvider.System` by default, or the one passed to its
+constructor. Every "now" the handler uses comes from it: a new token's `nbf`, `iat` and `exp`, and the instant
+`IsTokenValidAsync` judges a token's lifetime against, still with no clock skew. In a test, a fake clock such as
+`FakeTimeProvider` (package `Microsoft.Extensions.TimeProvider.Testing`) pins when a token starts and lets it expire
+without waiting:
+
+```csharp
+using Microsoft.Extensions.Time.Testing;
+
+var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
+var handler = new JwtHandler(clock);
+var token = handler.CreateToken(configuration); // lives from 12:00:00 for ExpirationInSeconds
+
+clock.Advance(TimeSpan.FromSeconds(configuration.ExpirationInSeconds + 1));
+var isValid = await handler.IsTokenValidAsync(token, configuration.Secret); // false: it has expired
 ```
 
 ### Rotating the signing key

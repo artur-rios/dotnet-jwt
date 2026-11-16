@@ -25,7 +25,7 @@ public class JwtKeyRotationTests
         };
 
     [Fact]
-    public void Given_ASigningKeyId_When_CreateTokenIsCalled_Then_TheTokenNamesTheKeyThatSignedIt()
+    public void GivenASigningKeyId_WhenCreateTokenIsCalled_ThenTheTokenNamesTheKeyThatSignedIt()
     {
         var token = _handler.CreateToken(Configuration("k2", OldKey, NewKey));
 
@@ -33,7 +33,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public void Given_NoSigningKeyId_When_CreateTokenIsCalled_Then_TheTokenCarriesNoKeyId()
+    public void GivenNoSigningKeyId_WhenCreateTokenIsCalled_ThenTheTokenCarriesNoKeyId()
     {
         // The shape every configuration had before rotation existed. It must keep producing exactly
         // what it produced then, or adopting the feature would invalidate tokens already issued.
@@ -43,7 +43,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ASigningKeyId_When_ValidatedAgainstThatKey_Then_ItIsValid()
+    public async Task GivenASigningKeyId_WhenValidatedAgainstThatKey_ThenItIsValid()
     {
         var token = _handler.CreateToken(Configuration("k2", OldKey, NewKey));
 
@@ -51,7 +51,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenSignedWithTheRetiredKey_When_ThatKeyIsStillAccepted_Then_ItIsValid()
+    public async Task GivenATokenSignedWithTheRetiredKey_WhenThatKeyIsStillAccepted_ThenItIsValid()
     {
         // The whole point. A token issued before the rotation keeps working while its key remains in
         // the accepted set, so switching signing keys does not sign everyone out.
@@ -61,7 +61,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenSignedWithAWithdrawnKey_When_Validated_Then_ItIsRefused()
+    public async Task GivenATokenSignedWithAWithdrawnKey_WhenValidated_ThenItIsRefused()
     {
         // The other half, and the one that matters when a key has leaked rather than merely aged:
         // dropping it from the accepted set must invalidate its tokens at once.
@@ -71,7 +71,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenWithAnUnknownKeyId_When_Validated_Then_ItIsRefused()
+    public async Task GivenATokenWithAnUnknownKeyId_WhenValidated_ThenItIsRefused()
     {
         // The kid names a key nothing here accepts, so the answer is already decided; the other keys
         // are not tried.
@@ -82,7 +82,17 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenClaimingOneKeyButSignedWithAnother_When_Validated_Then_ItIsRefused()
+    public async Task GivenATokenNamingAnUnknownKeyButSignedWithAnAcceptedSecret_WhenValidated_ThenItIsRefusedOnTheIdAlone()
+    {
+        // Same secret as OldKey, different id: the unknown kid decides, and the matching secret is never tried.
+        var stranger = new JwtKey("stranger", OldSecret);
+        var token = _handler.CreateToken(Configuration(stranger.Id, stranger));
+
+        Assert.False(await _handler.IsTokenValidAsync(token, [OldKey]));
+    }
+
+    [Fact]
+    public async Task GivenATokenClaimingOneKeyButSignedWithAnother_WhenValidated_ThenItIsRefused()
     {
         // The kid selects a key. It never grants anything, so a token that names a key it was not
         // signed with is refused rather than checked against whatever else might match.
@@ -92,7 +102,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenWithNoKeyId_When_ValidatedAgainstAKeySet_Then_EveryKeyIsTried()
+    public async Task GivenATokenWithNoKeyId_WhenValidatedAgainstAKeySet_ThenEveryKeyIsTried()
     {
         // Tokens issued before the deployment adopted rotation carry no kid. They have to keep
         // validating, or turning the feature on would be the outage it exists to prevent.
@@ -102,7 +112,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_ATokenWithNoKeyIdSignedByNothingInTheSet_When_Validated_Then_ItIsRefused()
+    public async Task GivenATokenWithNoKeyIdSignedByNothingInTheSet_WhenValidated_ThenItIsRefused()
     {
         var configuration = Configuration() with { Secret = ForeignSecret };
         var token = _handler.CreateToken(configuration);
@@ -111,7 +121,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_AnEmptyKeySet_When_Validated_Then_ItIsRefused()
+    public async Task GivenAnEmptyKeySet_WhenValidated_ThenItIsRefused()
     {
         // Nothing is accepted rather than everything: an empty set is a configuration mistake, and
         // the safe reading of it is that no signature satisfies it.
@@ -121,19 +131,20 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_AnExpiredToken_When_ValidatedAgainstItsKey_Then_ItIsRefused()
+    public async Task GivenAnExpiredToken_WhenValidatedAgainstItsKey_ThenItIsRefused()
     {
         // Naming the right key does not excuse a token from expiring.
-        var configuration = Configuration("k2", OldKey, NewKey) with { ExpirationInSeconds = 1 };
-        var token = _handler.CreateToken(configuration);
+        var (notBefore, expires) = TestTokens.EndedAgo(TimeSpan.FromSeconds(2));
+        var token = TestTokens.Hs256(NewSecret, notBefore, expires, NewKey.Id);
+        var live = TestTokens.Hs256(NewSecret, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1), NewKey.Id);
 
-        await Task.Delay(TimeSpan.FromSeconds(2));
-
+        Assert.Equal(NewKey.Id, _handler.GetKeyIdFromToken(token));
+        Assert.True(await _handler.IsTokenValidAsync(live, [OldKey, NewKey]));
         Assert.False(await _handler.IsTokenValidAsync(token, [OldKey, NewKey]));
     }
 
     [Fact]
-    public void Given_ASigningKeyIdNamingNoKey_When_CreateTokenIsCalled_Then_ItThrows()
+    public void GivenASigningKeyIdNamingNoKey_WhenCreateTokenIsCalled_ThenItThrows()
     {
         // Signing with a key nothing accepts would produce tokens that fail on first use, far from
         // the configuration that caused it.
@@ -145,7 +156,7 @@ public class JwtKeyRotationTests
     }
 
     [Fact]
-    public async Task Given_AKeyIdIsAddedWithoutChangingTheSecret_When_ValidatedTheOldWay_Then_ItIsStillValid()
+    public async Task GivenAKeyIdIsAddedWithoutChangingTheSecret_WhenValidatedTheOldWay_ThenItIsStillValid()
     {
         // The single-key overload knows nothing about kid, and must keep working against a token that
         // now carries one — otherwise adopting rotation would break every consumer still calling it.
@@ -154,31 +165,4 @@ public class JwtKeyRotationTests
         Assert.True(await _handler.IsTokenValidAsync(token, NewSecret));
     }
 
-    [Fact]
-    public async Task Given_TheDocumentedRotation_When_ItIsPerformedInOrder_Then_NoTokenIsEverRefused()
-    {
-        // The procedure end to end: add the new key, switch signing to it, then withdraw the old one.
-        // A token issued at each step is checked at every later step, which is what "no one is signed
-        // out" has to mean.
-        var beforeAnything = _handler.CreateToken(Configuration("k1", OldKey));
-
-        // Step 1 — the new key is accepted everywhere, but nothing signs with it yet.
-        var accepting = new[] { OldKey, NewKey };
-        var duringStepOne = _handler.CreateToken(Configuration("k1", accepting));
-
-        Assert.True(await _handler.IsTokenValidAsync(beforeAnything, accepting));
-        Assert.True(await _handler.IsTokenValidAsync(duringStepOne, accepting));
-
-        // Step 2 — signing switches to the new key. Both are still accepted.
-        var duringStepTwo = _handler.CreateToken(Configuration("k2", accepting));
-
-        Assert.True(await _handler.IsTokenValidAsync(beforeAnything, accepting));
-        Assert.True(await _handler.IsTokenValidAsync(duringStepOne, accepting));
-        Assert.True(await _handler.IsTokenValidAsync(duringStepTwo, accepting));
-
-        // Step 3 — after one token lifetime, the old key is withdrawn. Only tokens it signed die, and
-        // by then none of them is still alive.
-        Assert.True(await _handler.IsTokenValidAsync(duringStepTwo, [NewKey]));
-        Assert.False(await _handler.IsTokenValidAsync(beforeAnything, [NewKey]));
-    }
 }

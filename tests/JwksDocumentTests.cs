@@ -169,4 +169,39 @@ public class JwksDocumentTests
     {
         Assert.Throws<FormatException>(() => JwksDocument.Parse(json));
     }
+
+    [Theory]
+    [InlineData("{\"kty\":1,\"crv\":\"P-256\",\"x\":\"" + TestKeys.Rfc7515X + "\",\"y\":\"" + TestKeys.Rfc7515Y + "\"}")]
+    [InlineData("{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":1,\"y\":\"" + TestKeys.Rfc7515Y + "\"}")]
+    [InlineData("{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"" + TestKeys.Rfc7515X + "\"}")]
+    [InlineData("{\"kty\":\"EC\",\"x\":\"" + TestKeys.Rfc7515X + "\",\"y\":\"" + TestKeys.Rfc7515Y + "\"}")]
+    [InlineData("{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"not base64url!\",\"y\":\"" + TestKeys.Rfc7515Y + "\"}")]
+    [InlineData("{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"" + TestKeys.Rfc7515X + "\",\"y\":\"" + TestKeys.Rfc7515Y + "\",\"kid\":1}")]
+    public void GivenAnEntryMissingAMemberOrWithOneThatIsNotAString_WhenParsed_ThenItIsSkipped(string entry)
+    {
+        var parsed = JwksDocument.Parse(Entry($"{entry},{Rfc7515Entry()}"));
+
+        Assert.Equal(TestKeys.Rfc7515Thumbprint, Assert.Single(parsed).Id);
+    }
+
+    [Fact]
+    public void GivenAnEmptyKeysArray_WhenParsed_ThenNoKeyComesBack()
+    {
+        Assert.Empty(JwksDocument.Parse("{\"keys\":[]}"));
+    }
+
+    [Fact]
+    public void GivenAPublicKey_WhenPublished_ThenItIsPublishedAsItsPrivateFormWouldBe()
+    {
+        var key = TestKeys.NewEs256Key();
+
+        Assert.Equal(JwksDocument.From([key]), JwksDocument.From([key.ToPublicKey()]));
+    }
+
+    [Fact]
+    public void GivenNull_WhenPublishedOrParsed_ThenItIsRefusedAsAnArgument()
+    {
+        Assert.Throws<ArgumentNullException>(() => JwksDocument.From(null!));
+        Assert.Throws<ArgumentNullException>(() => JwksDocument.Parse(null!));
+    }
 }

@@ -13,7 +13,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_ValidConfiguration_When_Validated_Then_HasNoValidationErrors()
+    public void GivenValidConfiguration_WhenValidated_ThenHasNoValidationErrors()
     {
         var configuration = ValidConfiguration();
 
@@ -23,7 +23,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_EmptyAudience_When_Validated_Then_HasValidationErrorForAudience()
+    public void GivenEmptyAudience_WhenValidated_ThenHasValidationErrorForAudience()
     {
         var configuration = ValidConfiguration() with { Audience = string.Empty };
 
@@ -33,7 +33,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_EmptyIssuer_When_Validated_Then_HasValidationErrorForIssuer()
+    public void GivenEmptyIssuer_WhenValidated_ThenHasValidationErrorForIssuer()
     {
         var configuration = ValidConfiguration() with { Issuer = string.Empty };
 
@@ -43,7 +43,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_EmptySecret_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenEmptySecret_WhenValidated_ThenHasValidationErrorForSecret()
     {
         var configuration = ValidConfiguration() with { Secret = string.Empty };
 
@@ -55,7 +55,7 @@ public class JwtConfigurationValidatorTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void Given_ExpirationInSecondsNotGreaterThanZero_When_Validated_Then_HasValidationErrorForExpirationInSeconds(double expirationInSeconds)
+    public void GivenExpirationInSecondsNotGreaterThanZero_WhenValidated_ThenHasValidationErrorForExpirationInSeconds(double expirationInSeconds)
     {
         var configuration = ValidConfiguration() with { ExpirationInSeconds = expirationInSeconds };
 
@@ -65,7 +65,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_EmptyClaims_When_Validated_Then_HasValidationErrorForClaims()
+    public void GivenEmptyClaims_WhenValidated_ThenHasValidationErrorForClaims()
     {
         var configuration = ValidConfiguration() with { Claims = new Dictionary<string, string>() };
 
@@ -75,7 +75,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_KeysButNoSecret_When_Validated_Then_HasNoValidationErrors()
+    public void GivenKeysButNoSecret_WhenValidated_ThenHasNoValidationErrors()
     {
         // Secret was unconditionally required before Keys existed. A configuration that supplies its
         // key material through Keys has no use for it, and should not have to invent one.
@@ -92,7 +92,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_NoKeysAndNoSecret_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenNoKeysAndNoSecret_WhenValidated_ThenHasValidationErrorForSecret()
     {
         var configuration = ValidConfiguration() with { Secret = string.Empty };
 
@@ -102,7 +102,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_TwoKeysWithTheSameId_When_Validated_Then_HasValidationErrorForKeys()
+    public void GivenTwoKeysWithTheSameId_WhenValidated_ThenHasValidationErrorForKeys()
     {
         // A duplicate id makes the kid header ambiguous, so which key validates a token would come
         // down to configuration ordering.
@@ -119,7 +119,7 @@ public class JwtConfigurationValidatorTests
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
-    public void Given_AKeyWithoutAnId_When_Validated_Then_HasValidationErrorForKeys(string id)
+    public void GivenAKeyWithoutAnId_WhenValidated_ThenHasValidationErrorForKeys(string id)
     {
         var configuration = ValidConfiguration() with
         {
@@ -134,7 +134,7 @@ public class JwtConfigurationValidatorTests
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
-    public void Given_AKeyWithoutASecret_When_Validated_Then_HasValidationErrorForKeys(string secret)
+    public void GivenAKeyWithoutASecret_WhenValidated_ThenHasValidationErrorForKeys(string secret)
     {
         var configuration = ValidConfiguration() with { Keys = [new JwtKey("k1", secret)] };
 
@@ -144,7 +144,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_ASigningKeyIdNamingNoKey_When_Validated_Then_HasValidationErrorForSigningKeyId()
+    public void GivenASigningKeyIdNamingNoKey_WhenValidated_ThenHasValidationErrorForSigningKeyId()
     {
         // This rule is what makes the documented rotation order safe: the new key must already be
         // accepted everywhere before anything signs with it.
@@ -160,7 +160,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_KeysButNeitherASigningKeyIdNorASecret_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenKeysButNeitherASigningKeyIdNorASecret_WhenValidated_ThenHasValidationErrorForSecret()
     {
         // Without a SigningKeyId, CreateToken signs with Secret, so a blank one is a configuration
         // that cannot issue a token. It used to pass validation and throw on the first CreateToken.
@@ -176,7 +176,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_KeysAndASigningSecretThatIsNotOneOfThem_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenKeysAndASigningSecretThatIsNotOneOfThem_WhenValidated_ThenHasValidationErrorForSecret()
     {
         // The tokens would be signed with a key the configured key set does not accept, so every one
         // of them would fail validation against Keys — the same mistake SigningKeyId is guarded against.
@@ -191,7 +191,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_KeysAndASigningSecretThatIsOneOfThem_When_Validated_Then_HasNoValidationErrors()
+    public void GivenKeysAndASigningSecretThatIsOneOfThem_WhenValidated_ThenHasNoValidationErrors()
     {
         // A deployment adopting rotation: still signing with its old secret, which is now also a key.
         var configuration = ValidConfiguration() with
@@ -209,7 +209,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_ASecretShorterThan32Bytes_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenASecretShorterThan32Bytes_WhenValidated_ThenHasValidationErrorForSecret()
     {
         // HMAC-SHA256 needs a 256-bit key (RFC 7518 3.2), and the handler refuses to sign with a
         // short one at all, so such a configuration used to pass here and fail in CreateToken.
@@ -221,7 +221,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_ASecretOfExactly32Bytes_When_Validated_Then_HasNoValidationErrors()
+    public void GivenASecretOfExactly32Bytes_WhenValidated_ThenHasNoValidationErrors()
     {
         var result = _validator.TestValidate(ValidConfiguration() with { Secret = new string('s', 32) });
 
@@ -229,7 +229,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AShortSecretThatSignsNothing_When_Validated_Then_ItIsNotChecked()
+    public void GivenAShortSecretThatSignsNothing_WhenValidated_ThenItIsNotChecked()
     {
         // With a SigningKeyId the secret is unused, so its length is irrelevant.
         var configuration = ValidConfiguration() with
@@ -245,7 +245,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AKeyWithASecretShorterThan32Bytes_When_Validated_Then_HasValidationErrorForKeys()
+    public void GivenAKeyWithASecretShorterThan32Bytes_WhenValidated_ThenHasValidationErrorForKeys()
     {
         var configuration = ValidConfiguration() with
         {
@@ -259,7 +259,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AConfigurationThatPassesValidation_When_CreatingAToken_Then_ItDoesNotThrow()
+    public void GivenAConfigurationThatPassesValidation_WhenCreatingAToken_ThenItDoesNotThrow()
     {
         // The validator's stated purpose: a configuration it accepts is one that can create a token.
         var handler = new JwtHandler();
@@ -283,7 +283,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_NoSigningKeyIdAndNoKeys_When_Validated_Then_HasNoValidationErrors()
+    public void GivenNoSigningKeyIdAndNoKeys_WhenValidated_ThenHasNoValidationErrors()
     {
         // The shape every configuration had before rotation existed stays valid, unchanged.
         var result = _validator.TestValidate(ValidConfiguration());
@@ -292,19 +292,19 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AConfigurationWithNoAlgorithmSet_When_Inspected_Then_ItIsHs256()
+    public void GivenAConfigurationWithNoAlgorithmSet_WhenInspected_ThenItIsHs256()
     {
         Assert.Equal(JwtAlgorithms.HS256, ValidConfiguration().Algorithm);
     }
 
     [Fact]
-    public void Given_AValidEs256Configuration_When_Validated_Then_HasNoValidationErrors()
+    public void GivenAValidEs256Configuration_WhenValidated_ThenHasNoValidationErrors()
     {
         _validator.TestValidate(TestKeys.Es256Configuration()).ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
-    public void Given_AnEs256ConfigurationAcceptingAPreviousPublicKey_When_Validated_Then_HasNoValidationErrors()
+    public void GivenAnEs256ConfigurationAcceptingAPreviousPublicKey_WhenValidated_ThenHasNoValidationErrors()
     {
         var current = TestKeys.NewEs256Key();
         var configuration = TestKeys.Es256Configuration(current) with { Keys = [current, TestKeys.NewEs256Key().ToPublicKey()] };
@@ -313,7 +313,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnUnknownAlgorithm_When_Validated_Then_HasValidationErrorForAlgorithm()
+    public void GivenAnUnknownAlgorithm_WhenValidated_ThenHasValidationErrorForAlgorithm()
     {
         var result = _validator.TestValidate(ValidConfiguration() with { Algorithm = "RS256" });
 
@@ -321,7 +321,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256ConfigurationWithASecret_When_Validated_Then_HasValidationErrorForSecret()
+    public void GivenAnEs256ConfigurationWithASecret_WhenValidated_ThenHasValidationErrorForSecret()
     {
         // ES256 signs with the private key in Keys; a secret beside it would be unused, and a reader of
         // the configuration could believe it mattered.
@@ -331,7 +331,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256ConfigurationWithoutASigningKeyId_When_Validated_Then_HasValidationErrorForSigningKeyId()
+    public void GivenAnEs256ConfigurationWithoutASigningKeyId_WhenValidated_ThenHasValidationErrorForSigningKeyId()
     {
         var result = _validator.TestValidate(TestKeys.Es256Configuration() with { SigningKeyId = null });
 
@@ -339,7 +339,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256ConfigurationHoldingASecretKey_When_Validated_Then_HasValidationErrorForKeys()
+    public void GivenAnEs256ConfigurationHoldingASecretKey_WhenValidated_ThenHasValidationErrorForKeys()
     {
         var current = TestKeys.NewEs256Key();
         var configuration = TestKeys.Es256Configuration(current) with
@@ -351,7 +351,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnHs256ConfigurationHoldingAnEcKey_When_Validated_Then_HasValidationErrorForKeys()
+    public void GivenAnHs256ConfigurationHoldingAnEcKey_WhenValidated_ThenHasValidationErrorForKeys()
     {
         // One configuration, one algorithm: an EC key here would either be ignored or be checked against
         // HS256 tokens, and neither is something a reader of the configuration could predict.
@@ -364,7 +364,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256SigningKeyWithoutItsPrivateHalf_When_Validated_Then_HasValidationErrorForSigningKeyId()
+    public void GivenAnEs256SigningKeyWithoutItsPrivateHalf_WhenValidated_ThenHasValidationErrorForSigningKeyId()
     {
         var result = _validator.TestValidate(TestKeys.Es256Configuration(TestKeys.NewEs256Key().ToPublicKey()));
 
@@ -372,7 +372,7 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256KeyRenamedAwayFromItsThumbprint_When_Validated_Then_HasValidationErrorForKeys()
+    public void GivenAnEs256KeyRenamedAwayFromItsThumbprint_WhenValidated_ThenHasValidationErrorForKeys()
     {
         // The kid is derived, never configured: a renamed key would sign tokens no published key set names.
         var renamed = TestKeys.NewEs256Key() with { Id = "current" };
@@ -381,12 +381,33 @@ public class JwtConfigurationValidatorTests
     }
 
     [Fact]
-    public void Given_AnEs256ConfigurationThatPassesValidation_When_CreatingAToken_Then_ItDoesNotThrow()
+    public void GivenAnEs256ConfigurationThatPassesValidation_WhenCreatingAToken_ThenItDoesNotThrow()
     {
         var configuration = TestKeys.Es256Configuration();
 
         _validator.TestValidate(configuration).ShouldNotHaveAnyValidationErrors();
 
         Assert.False(string.IsNullOrWhiteSpace(new JwtHandler().CreateToken(configuration)));
+    }
+
+    [Fact]
+    public void GivenAnEs256SigningKeyIdNamingNoKey_WhenValidated_ThenOnlyTheMissingKeyIsReported()
+    {
+        var configuration = TestKeys.Es256Configuration() with { SigningKeyId = "not-a-thumbprint" };
+
+        var result = new JwtConfigurationValidator().TestValidate(configuration);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(nameof(JwtConfiguration.SigningKeyId), error.PropertyName);
+        Assert.Contains("must name a key", error.ErrorMessage);
+    }
+
+    [Fact]
+    public void GivenASecretOf32NonAsciiCharacters_WhenValidated_ThenItCountsAs32Bytes()
+    {
+        // The secret's length is counted as the handler reads it: as ASCII, one byte per character.
+        var configuration = ValidConfiguration() with { Secret = new string('é', 32) };
+
+        new JwtConfigurationValidator().TestValidate(configuration).ShouldNotHaveAnyValidationErrors();
     }
 }

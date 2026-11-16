@@ -43,8 +43,11 @@ public class KeyRotationLifecycleTests
 
         _validator.ValidateAndThrow(accepting);
 
+        var issuedAccepting = _handler.CreateToken(accepting);
+
         Assert.True(await _handler.IsTokenValidAsync(issuedBefore, accepting.Keys));
-        Assert.Equal(OldKey.Id, _handler.GetKeyIdFromToken(_handler.CreateToken(accepting)));
+        Assert.True(await _handler.IsTokenValidAsync(issuedAccepting, accepting.Keys));
+        Assert.Equal(OldKey.Id, _handler.GetKeyIdFromToken(issuedAccepting));
 
         // Step 2: the new key starts signing. Tokens issued under the old one still validate.
         var rotated = Configuration([OldKey, NewKey], NewKey.Id);
@@ -55,6 +58,7 @@ public class KeyRotationLifecycleTests
 
         Assert.Equal(NewKey.Id, _handler.GetKeyIdFromToken(issuedAfter));
         Assert.True(await _handler.IsTokenValidAsync(issuedBefore, rotated.Keys));
+        Assert.True(await _handler.IsTokenValidAsync(issuedAccepting, rotated.Keys));
         Assert.True(await _handler.IsTokenValidAsync(issuedAfter, rotated.Keys));
 
         // Step 3: the old key is withdrawn once nothing it signed can still be alive.
@@ -63,77 +67,14 @@ public class KeyRotationLifecycleTests
         _validator.ValidateAndThrow(withdrawn);
 
         Assert.False(await _handler.IsTokenValidAsync(issuedBefore, withdrawn.Keys));
+        Assert.False(await _handler.IsTokenValidAsync(issuedAccepting, withdrawn.Keys));
         Assert.True(await _handler.IsTokenValidAsync(issuedAfter, withdrawn.Keys));
     }
 
-    [Fact]
-    public async Task GivenATokenIssuedBeforeRotationWasAdopted_WhenValidatedAgainstKeys_ThenItIsStillAccepted()
-    {
-        var legacy = new JwtConfiguration(300, "issuer", "audience", OldSecret,
-            new Dictionary<string, string> { ["id"] = "7" });
 
-        var legacyToken = _handler.CreateToken(legacy);
 
-        Assert.Null(_handler.GetKeyIdFromToken(legacyToken));
-        Assert.True(await _handler.IsTokenValidAsync(legacyToken, new[] { NewKey, OldKey }));
-    }
 
-    [Fact]
-    public async Task GivenATokenNamingAKeyThatIsNotConfigured_WhenValidating_ThenItIsRefusedWithoutTryingTheOthers()
-    {
-        var strangerKey = new JwtKey("stranger", OldSecret);
-        var stranger = Configuration([strangerKey], strangerKey.Id);
 
-        var token = _handler.CreateToken(stranger);
 
-        // Same secret as OldKey, different id: refusing on the id alone is the documented behaviour.
-        Assert.False(await _handler.IsTokenValidAsync(token, new[] { OldKey }));
-    }
 
-    [Fact]
-    public void GivenASigningKeyThatIsNotInKeys_WhenValidatingTheConfiguration_ThenItIsRejected()
-    {
-        var invalid = Configuration([OldKey], NewKey.Id);
-
-        var errors = _validator.Validate(invalid).Errors;
-
-        Assert.Contains(errors, error => error.PropertyName == nameof(JwtConfiguration.SigningKeyId));
-    }
-
-    [Fact]
-    public void GivenASigningKeyThatIsNotInKeys_WhenCreatingAToken_ThenItFailsBeforeIssuingOne()
-    {
-        var invalid = Configuration([OldKey], NewKey.Id);
-
-        Assert.Throws<InvalidOperationException>(() => _handler.CreateToken(invalid));
-    }
-
-    [Fact]
-    public void GivenTwoKeysSharingAnId_WhenValidatingTheConfiguration_ThenItIsRejected()
-    {
-        var duplicate = Configuration([OldKey, new JwtKey(OldKey.Id, NewSecret)], OldKey.Id);
-
-        var errors = _validator.Validate(duplicate).Errors;
-
-        Assert.Contains(errors, error => error.PropertyName == nameof(JwtConfiguration.Keys));
-    }
-
-    [Fact]
-    public void GivenNoKeysAndNoSecret_WhenValidatingTheConfiguration_ThenTheSecretIsRequired()
-    {
-        var empty = new JwtConfiguration(300, "issuer", "audience", string.Empty,
-            new Dictionary<string, string> { ["id"] = "7" });
-
-        var errors = _validator.Validate(empty).Errors;
-
-        Assert.Contains(errors, error => error.PropertyName == nameof(JwtConfiguration.Secret));
-    }
-
-    [Fact]
-    public void GivenKeysButNoSecret_WhenValidatingTheConfiguration_ThenTheSecretIsNotRequired()
-    {
-        var errors = _validator.Validate(Configuration([OldKey], OldKey.Id)).Errors;
-
-        Assert.DoesNotContain(errors, error => error.PropertyName == nameof(JwtConfiguration.Secret));
-    }
 }

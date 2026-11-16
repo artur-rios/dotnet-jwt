@@ -112,10 +112,12 @@ public class Es256HandlerTests
     public async Task GivenAnExpiredEs256Token_WhenValidated_ThenItIsRefused()
     {
         var key = TestKeys.NewEs256Key();
-        var token = _handler.CreateToken(Es256(key) with { ExpirationInSeconds = 1 });
+        var (notBefore, expires) = TestTokens.EndedAgo(TimeSpan.FromSeconds(2));
+        var token = TestTokens.Es256(key, notBefore, expires);
+        var live = TestTokens.Es256(key, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
 
-        await Task.Delay(TimeSpan.FromSeconds(2));
-
+        Assert.Equal(key.Id, _handler.GetKeyIdFromToken(token));
+        Assert.True(await _handler.IsTokenValidAsync(live, [key.ToPublicKey()]));
         Assert.False(await _handler.IsTokenValidAsync(token, [key.ToPublicKey()]));
     }
 
@@ -147,5 +149,32 @@ public class Es256HandlerTests
         var failure = Assert.Throws<InvalidOperationException>(() => _handler.CreateToken(configuration));
 
         Assert.Contains("RS256", failure.Message);
+    }
+
+    [Fact]
+    public void GivenAnEs256ConfigurationNamingASecretKey_WhenCreatingAToken_ThenItThrows()
+    {
+        var secretKey = new JwtKey("k1", TestKeys.Secret);
+        var configuration = TestKeys.Es256Configuration() with { Keys = [secretKey], SigningKeyId = secretKey.Id };
+
+        var failure = Assert.Throws<InvalidOperationException>(() => _handler.CreateToken(configuration));
+
+        Assert.Contains("k1", failure.Message);
+    }
+
+    [Fact]
+    public void GivenAnEs256ConfigurationWithABlankSigningKeyId_WhenCreatingAToken_ThenItThrows()
+    {
+        var configuration = TestKeys.Es256Configuration() with { SigningKeyId = "  " };
+
+        Assert.Throws<InvalidOperationException>(() => _handler.CreateToken(configuration));
+    }
+
+    [Fact]
+    public async Task GivenAnEs256Token_WhenValidatedAgainstASecret_ThenItIsRefused()
+    {
+        var token = _handler.CreateToken(TestKeys.Es256Configuration());
+
+        Assert.False(await _handler.IsTokenValidAsync(token, TestKeys.Secret));
     }
 }

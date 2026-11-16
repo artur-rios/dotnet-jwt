@@ -4,7 +4,7 @@ namespace ArturRios.Jwt.Tests;
 public class JwtConfigurationTests
 {
     [Fact]
-    public void Given_NoArguments_When_ConfigurationIsConstructed_Then_DefaultValuesAreSet()
+    public void GivenNoArguments_WhenConfigurationIsConstructed_ThenDefaultValuesAreSet()
     {
         var configuration = new JwtConfiguration();
 
@@ -16,7 +16,7 @@ public class JwtConfigurationTests
     }
 
     [Fact]
-    public void Given_Arguments_When_ConfigurationIsConstructed_Then_PropertiesAreSetFromArguments()
+    public void GivenArguments_WhenConfigurationIsConstructed_ThenPropertiesAreSetFromArguments()
     {
         const double expirationInSeconds = 3600;
         const string issuer = "issuer";
@@ -34,7 +34,7 @@ public class JwtConfigurationTests
     }
 
     [Fact]
-    public void Given_TwoConfigurationsWithSameValues_When_ConfigurationsAreCompared_Then_TheyAreEqual()
+    public void GivenTwoConfigurationsWithSameValues_WhenConfigurationsAreCompared_ThenTheyAreEqual()
     {
         var claims = new Dictionary<string, string> { { "id", "1" } };
         var first = new JwtConfiguration(3600, "issuer", "audience", "secret", claims);
@@ -46,7 +46,7 @@ public class JwtConfigurationTests
     }
 
     [Fact]
-    public void Given_TwoConfigurationsWithDifferentValues_When_ConfigurationsAreCompared_Then_TheyAreNotEqual()
+    public void GivenTwoConfigurationsWithDifferentValues_WhenConfigurationsAreCompared_ThenTheyAreNotEqual()
     {
         var first = new JwtConfiguration(3600, "issuer", "audience", "secret", new Dictionary<string, string>());
         var second = new JwtConfiguration(1800, "other-issuer", "other-audience", "other-secret", new Dictionary<string, string>());
@@ -54,5 +54,44 @@ public class JwtConfigurationTests
         var areEqual = first.Equals(second);
 
         Assert.False(areEqual);
+    }
+
+    [Fact]
+    public void GivenNoArguments_WhenConfigurationIsConstructed_ThenItHasNoKeysNoSigningKeyAndSignsHs256()
+    {
+        var configuration = new JwtConfiguration();
+
+        Assert.Empty(configuration.Keys);
+        Assert.Null(configuration.SigningKeyId);
+        Assert.Equal(JwtAlgorithms.HS256, configuration.Algorithm);
+    }
+
+    [Fact]
+    public void GivenTwoConfigurationsWithEqualClaimsInSeparateDictionaries_WhenCompared_ThenTheyAreNotEqual()
+    {
+        // A record compares its collections by reference, not by content.
+        var first = new JwtConfiguration(3600, "issuer", "audience", "secret", new Dictionary<string, string> { { "id", "1" } });
+        var second = new JwtConfiguration(3600, "issuer", "audience", "secret", new Dictionary<string, string> { { "id", "1" } });
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Theory]
+    [InlineData(nameof(JwtConfiguration.Keys))]
+    [InlineData(nameof(JwtConfiguration.SigningKeyId))]
+    [InlineData(nameof(JwtConfiguration.Algorithm))]
+    public void GivenTwoConfigurationsDifferingInOneInitProperty_WhenCompared_ThenTheyAreNotEqual(string property)
+    {
+        var first = new JwtConfiguration();
+
+        var second = property switch
+        {
+            nameof(JwtConfiguration.Keys) => first with { Keys = [new JwtKey("k1", "secret")] },
+            nameof(JwtConfiguration.SigningKeyId) => first with { SigningKeyId = "k1" },
+            _ => first with { Algorithm = JwtAlgorithms.ES256 }
+        };
+
+        Assert.NotEqual(first, second);
+        Assert.Equal(first, first with { });
     }
 }

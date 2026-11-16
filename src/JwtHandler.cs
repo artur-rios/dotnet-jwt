@@ -407,18 +407,13 @@ public class JwtHandler
     private bool IsWithinLifetime(DateTime? notBefore, DateTime? expires, SecurityToken token,
         TokenValidationParameters parameters)
     {
-        if (expires is null)
-        {
-            return false;
-        }
-
-        if (notBefore > expires)
+        if (expires is not { } end || notBefore > end)
         {
             return false;
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        return !(notBefore > now + parameters.ClockSkew) && !(expires < now - parameters.ClockSkew);
+        return !(notBefore > now + parameters.ClockSkew) && end >= now - parameters.ClockSkew;
     }
 }

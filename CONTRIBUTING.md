@@ -36,8 +36,9 @@ dotnet test src/ArturRios.Jwt.sln --filter "Category=Functional"
 
 Unit tests exercise the code in isolation against test doubles.
 Functional tests walk the documented three-step key rotation end to end, issuing and validating real tokens at every step.
-No test waits for a token to expire: one that needs an expired or not-yet-valid token writes it with that lifetime
-(`TestTokens`).
+No test waits for a token to expire: one that needs an expired token issues it on a `FakeTimeProvider` and advances
+the clock, and one that needs a lifetime `JwtHandler` cannot issue (not started yet, or with no expiry) writes it
+with that lifetime (`TestTokens`).
 
 CI runs the suite once, in the `coverage` check (`ci/coverage.sh`): every test of both kinds, with coverage
 collected, and the HTML report that the docs site serves at `/coverage-report/`. Every test must pass, and none may

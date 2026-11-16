@@ -22,18 +22,6 @@ internal static class TestTokens
         Write(new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secret)) { KeyId = keyId },
             SecurityAlgorithms.HmacSha256, notBefore, expires);
 
-    /// <summary>An ES256 token signed with <paramref name="key"/>'s private half, naming it by its thumbprint.</summary>
-    public static string Es256(JwtKey key, DateTime notBefore, DateTime expires) =>
-        Write(key.ToSecurityKey(), SecurityAlgorithms.EcdsaSha256, notBefore, expires);
-
-    /// <summary>A lifetime that ended <paramref name="ago"/> before now, after an hour.</summary>
-    public static (DateTime NotBefore, DateTime Expires) EndedAgo(TimeSpan ago)
-    {
-        var expires = DateTime.UtcNow - ago;
-
-        return (expires.AddHours(-1), expires);
-    }
-
     /// <summary>
     /// An HS256 token whose <c>nbf</c> and <c>exp</c> are written as given, in any order: the token classes refuse to
     /// build a lifetime that ends before it starts, so the payload is written by hand.

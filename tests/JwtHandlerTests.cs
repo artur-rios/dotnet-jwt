@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Time.Testing;
+
 namespace ArturRios.Jwt.Tests;
 
 [Trait("Category", "Unit")]
@@ -70,10 +72,12 @@ public class JwtHandlerTests
     public async Task GivenATokenThatExpiredTwoSecondsAgo_WhenIsTokenValidAsyncIsCalled_ThenReturnsFalse()
     {
         // No clock skew is allowed: the library's default of five minutes would still accept it.
-        var (notBefore, expires) = TestTokens.EndedAgo(TimeSpan.FromSeconds(2));
-        var token = TestTokens.Hs256(ValidSecret, notBefore, expires);
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
+        var handler = new JwtHandler(clock);
+        var token = handler.CreateToken(ValidConfiguration(expirationInSeconds: 60));
+        clock.Advance(TimeSpan.FromSeconds(62));
 
-        var isValid = await _handler.IsTokenValidAsync(token, ValidSecret);
+        var isValid = await handler.IsTokenValidAsync(token, ValidSecret);
 
         Assert.False(isValid);
     }

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Time.Testing;
+
 namespace ArturRios.Jwt.Tests;
 
 /// <summary>
@@ -134,13 +136,16 @@ public class JwtKeyRotationTests
     public async Task GivenAnExpiredToken_WhenValidatedAgainstItsKey_ThenItIsRefused()
     {
         // Naming the right key does not excuse a token from expiring.
-        var (notBefore, expires) = TestTokens.EndedAgo(TimeSpan.FromSeconds(2));
-        var token = TestTokens.Hs256(NewSecret, notBefore, expires, NewKey.Id);
-        var live = TestTokens.Hs256(NewSecret, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1), NewKey.Id);
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
+        var handler = new JwtHandler(clock);
+        var token = handler.CreateToken(Configuration("k2", OldKey, NewKey) with { ExpirationInSeconds = 60 });
 
-        Assert.Equal(NewKey.Id, _handler.GetKeyIdFromToken(token));
-        Assert.True(await _handler.IsTokenValidAsync(live, [OldKey, NewKey]));
-        Assert.False(await _handler.IsTokenValidAsync(token, [OldKey, NewKey]));
+        Assert.Equal(NewKey.Id, handler.GetKeyIdFromToken(token));
+        Assert.True(await handler.IsTokenValidAsync(token, [OldKey, NewKey]));
+
+        clock.Advance(TimeSpan.FromSeconds(62));
+
+        Assert.False(await handler.IsTokenValidAsync(token, [OldKey, NewKey]));
     }
 
     [Fact]

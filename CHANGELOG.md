@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-19
+
+### Added
+
+- `JwtHandler(TimeProvider)`: a handler that reads the time from the given clock, to issue tokens (`nbf`, `iat`,
+  `exp`) and to judge their lifetime when validating, still with no clock skew. A test can pass a fake clock, such
+  as `FakeTimeProvider`, to pin when a token starts or let it expire without waiting. `new JwtHandler()` reads the
+  system clock, as before.
+
+### Fixed
+
+- `JwtHandler.CreateToken` documents the `ArgumentException` it throws for a blank secret or one shorter than 32
+  bytes, and for an `ExpirationInSeconds` of zero or less, as the parameterless `JwtConfiguration()` has. Only its
+  `InvalidOperationException` was documented.
+
 ## [1.4.2] - 2026-11-14
 
 ### Changed
@@ -107,7 +122,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.2...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.2...1.5.0
 [1.4.2]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.1...1.4.2
 [1.4.1]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.0...1.4.1
 [1.4.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...1.4.0

@@ -11,6 +11,34 @@ namespace ArturRios.Jwt;
 public class JwtHandler
 {
     private readonly JwtSecurityTokenHandler _handler = new();
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// Initializes a handler that reads the system clock, <see cref="TimeProvider.System"/>.
+    /// </summary>
+    public JwtHandler() : this(TimeProvider.System) { }
+
+    /// <summary>
+    /// Initializes a handler that reads the time from <paramref name="timeProvider"/>, both to issue tokens and
+    /// to validate them.
+    /// </summary>
+    /// <remarks>
+    /// Every "now" the handler uses comes from <paramref name="timeProvider"/>: the start (<c>nbf</c>), issue
+    /// time (<c>iat</c>) and expiry (<c>exp</c>) of a token <see cref="CreateToken"/> writes, and the instant
+    /// <see cref="IsTokenValidAsync(string, string)"/> and <see cref="IsTokenValidAsync(string, IEnumerable{JwtKey})"/>
+    /// judge a token's lifetime against, still with no clock skew. Pass
+    /// <see cref="TimeProvider.System"/>, the default, in production, and a fake clock such as
+    /// <c>Microsoft.Extensions.Time.Testing.FakeTimeProvider</c> in a test that needs a token to start at a
+    /// known instant or to expire without waiting.
+    /// </remarks>
+    /// <param name="timeProvider">The clock to read the time from.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="timeProvider"/> is <see langword="null"/>.</exception>
+    public JwtHandler(TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        _timeProvider = timeProvider;
+    }
 
     /// <summary>
     /// Creates a signed JWT from the given configuration, with the algorithm it names: HMAC-SHA256 by
@@ -27,6 +55,11 @@ public class JwtHandler
     /// <b>ES256.</b> Signs with the private key <see cref="JwtConfiguration.SigningKeyId"/> names in
     /// <see cref="JwtConfiguration.Keys"/>, and stamps its thumbprint on the <c>kid</c> header.
     /// </para>
+    /// <para>
+    /// The token's lifetime starts at the handler's clock's current time (see <see cref="JwtHandler(TimeProvider)"/>),
+    /// which is also its issue time (<c>nbf</c> and <c>iat</c>), and ends
+    /// <see cref="JwtConfiguration.ExpirationInSeconds"/> later (<c>exp</c>).
+    /// </para>
     /// </remarks>
     /// <param name="configuration">The issuer, audience, expiration, algorithm, signing key and claims to embed in the token.</param>
     /// <returns>The serialized, signed JWT.</returns>
@@ -37,6 +70,11 @@ public class JwtHandler
     /// accept would produce a token that fails on its first use, so it fails here instead, where the cause is
     /// visible.
     /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The token would be signed with <see cref="JwtConfiguration.Secret"/> and it is blank or shorter than
+    /// 32 bytes, too weak for HS256; or <see cref="JwtConfiguration.ExpirationInSeconds"/> is zero or negative,
+    /// so the token would expire before it is valid. The parameterless <see cref="JwtConfiguration()"/> has both.
+    /// </exception>
     public string CreateToken(JwtConfiguration configuration)
     {
         var credentials = ResolveSigningCredentials(configuration);
@@ -45,7 +83,7 @@ public class JwtHandler
 
         ClaimsIdentity identity = new(claimsList);
 
-        var creationDate = DateTime.UtcNow;
+        var creationDate = _timeProvider.GetUtcNow().UtcDateTime;
         var expirationDate = creationDate + TimeSpan.FromSeconds(configuration.ExpirationInSeconds);
 
         var token = _handler.CreateToken(new SecurityTokenDescriptor
@@ -54,6 +92,7 @@ public class JwtHandler
             Audience = configuration.Audience,
             SigningCredentials = credentials,
             Subject = identity,
+            IssuedAt = creationDate,
             NotBefore = creationDate,
             Expires = expirationDate
         });
@@ -351,9 +390,35 @@ public class JwtHandler
                 ValidAlgorithms = [algorithm],
                 ValidateIssuer = false,
                 ValidateAudience = false,
-                ClockSkew = TimeSpan.Zero
+                ClockSkew = TimeSpan.Zero,
+                LifetimeValidator = IsWithinLifetime
             });
 
         return output.IsValid;
+    }
+
+    /// <summary>
+    /// Judges a token's lifetime against the handler's clock, so that tokens issued under a clock are judged under
+    /// the same one rather than against real time.
+    /// </summary>
+    /// <remarks>
+    /// The checks <see cref="Validators.ValidateLifetime(DateTime?, DateTime?, SecurityToken, TokenValidationParameters)"/>
+    /// makes, in its order and with its boundaries, but reading <see cref="TimeProvider.GetUtcNow"/> where it reads
+    /// <see cref="DateTime.UtcNow"/>: IdentityModel 8 keeps its own time provider setting internal. An expiry is
+    /// required (<see cref="TokenValidationParameters.RequireExpirationTime"/>, which this class never turns off), a
+    /// lifetime that ends before it starts is refused, and <see cref="TokenValidationParameters.ClockSkew"/> widens
+    /// both ends.
+    /// </remarks>
+    private bool IsWithinLifetime(DateTime? notBefore, DateTime? expires, SecurityToken token,
+        TokenValidationParameters parameters)
+    {
+        if (expires is not { } end || notBefore > end)
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        return !(notBefore > now + parameters.ClockSkew) && end >= now - parameters.ClockSkew;
     }
 }

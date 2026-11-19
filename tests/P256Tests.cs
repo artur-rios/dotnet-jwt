@@ -77,4 +77,39 @@ public class P256Tests
 
         Assert.False(P256.IsOnCurve(allOnes, allOnes));
     }
+
+    [Theory]
+    [InlineData("nistP256")]
+    [InlineData("ECDSA_P256")]
+    [InlineData("prime256v1")]
+    [InlineData("secp256r1")]
+    public void GivenP256NamedByOneOfItsFriendlyNames_WhenChecked_ThenItIsNamedP256(string friendlyName)
+    {
+        // Whether the platform resolves the name to the OID or not, the name alone is enough.
+        Assert.True(P256.IsNamed(ECCurve.CreateFromFriendlyName(friendlyName)));
+    }
+
+    [Fact]
+    public void GivenP256NamedByItsOidAlone_WhenChecked_ThenItIsNamedP256()
+    {
+        Assert.True(P256.IsNamed(ECCurve.CreateFromValue(P256.Oid)));
+    }
+
+    [Theory]
+    [InlineData("nistP384")]
+    [InlineData("brainpoolP256r1")]
+    public void GivenAnotherNamedCurve_WhenChecked_ThenItIsNotNamedP256(string friendlyName)
+    {
+        Assert.False(P256.IsNamed(ECCurve.CreateFromFriendlyName(friendlyName)));
+    }
+
+    [Fact]
+    public void GivenP256GivenByItsExplicitParameters_WhenChecked_ThenItIsNotNamedP256()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var explicitCurve = key.ExportExplicitParameters(includePrivateParameters: false).Curve;
+
+        Assert.False(P256.IsNamed(explicitCurve));
+    }
 }

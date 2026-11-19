@@ -1,5 +1,7 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
 
 namespace ArturRios.Jwt.Tests;
 
@@ -207,4 +209,73 @@ public class EcJwtKeyTests
                 return "-----BEGIN PRIVATE KEY-----\nbm90LWEta2V5\n-----END PRIVATE KEY-----\n";
         }
     }
+
+    [Fact]
+    public void GivenASecretKey_WhenTurnedIntoASecurityKey_ThenItIsASymmetricKeyNamedByItsIdOverTheSecretsAsciiBytes()
+    {
+        var key = new JwtKey("k1", TestKeys.Secret);
+
+        var securityKey = Assert.IsType<SymmetricSecurityKey>(key.ToSecurityKey());
+
+        Assert.Equal("k1", securityKey.KeyId);
+        Assert.Equal(Encoding.ASCII.GetBytes(TestKeys.Secret), securityKey.Key);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GivenASecretKeyWithABlankSecret_WhenInspected_ThenItCannotSign(string secret)
+    {
+        var key = new JwtKey("k1", secret);
+
+        Assert.False(key.CanSign);
+        Assert.Equal(JwtAlgorithms.HS256, key.Algorithm);
+    }
+
+    [Fact]
+    public void GivenAKeyAndNull_WhenCompared_ThenTheyAreNotEqual()
+    {
+        Assert.False(new JwtKey("k1", TestKeys.Secret).Equals(null));
+        Assert.False(TestKeys.NewEs256Key().Equals(null));
+    }
+
+    [Fact]
+    public void GivenTwoSecretKeysDifferingOnlyInTheirSecret_WhenCompared_ThenTheyAreNotEqual()
+    {
+        Assert.NotEqual(new JwtKey("k1", TestKeys.Secret), new JwtKey("k1", TestKeys.Secret + "!"));
+    }
+
+    [Fact]
+    public void GivenAnEcKeyAndASecretKeyWithItsId_WhenCompared_ThenTheyAreNotEqual()
+    {
+        var ecKey = TestKeys.NewEs256Key().ToPublicKey();
+
+        Assert.NotEqual(ecKey, new JwtKey(ecKey.Id, string.Empty));
+    }
+
+    [Fact]
+    public void GivenAKeyOfADerivedRecordType_WhenComparedWithAJwtKeyOfTheSameValues_ThenTheyAreNotEqual()
+    {
+        Assert.NotEqual(new JwtKey("k1", TestKeys.Secret), new NamedKey("k1", TestKeys.Secret));
+    }
+
+    [Fact]
+    public void GivenEqualKeys_WhenHashed_ThenTheirHashCodesAreEqual()
+    {
+        var pem = TestKeys.NewP256Pem();
+
+        Assert.Equal(JwtKey.FromEcPrivateKeyPem(pem).GetHashCode(), JwtKey.FromEcPrivateKeyPem(pem).GetHashCode());
+        Assert.Equal(new JwtKey("k1", TestKeys.Secret).GetHashCode(), new JwtKey("k1", TestKeys.Secret).GetHashCode());
+    }
+
+    [Fact]
+    public void GivenNullCoordinates_WhenRead_ThenTheyAreRefusedAsArguments()
+    {
+        Assert.Throws<ArgumentNullException>(() => JwtKey.FromEcPublicJwk(null!, TestKeys.Rfc7515Y));
+        Assert.Throws<ArgumentNullException>(() => JwtKey.FromEcPublicJwk(TestKeys.Rfc7515X, null!));
+        Assert.Throws<ArgumentNullException>(() => JwtKey.FromEcPrivateKeyPem(null!));
+    }
+
+    /// <summary>A record deriving from <see cref="JwtKey"/>, as a caller may write.</summary>
+    private sealed record NamedKey(string Id, string Secret) : JwtKey(Id, Secret);
 }

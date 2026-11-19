@@ -70,6 +70,11 @@ public class JwtHandler
     /// accept would produce a token that fails on its first use, so it fails here instead, where the cause is
     /// visible.
     /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The token would be signed with <see cref="JwtConfiguration.Secret"/> and it is blank or shorter than
+    /// 32 bytes, too weak for HS256; or <see cref="JwtConfiguration.ExpirationInSeconds"/> is zero or negative,
+    /// so the token would expire before it is valid. The parameterless <see cref="JwtConfiguration()"/> has both.
+    /// </exception>
     public string CreateToken(JwtConfiguration configuration)
     {
         var credentials = ResolveSigningCredentials(configuration);

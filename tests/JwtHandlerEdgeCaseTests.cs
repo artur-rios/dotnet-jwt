@@ -316,6 +316,20 @@ public class JwtHandlerEdgeCaseTests
         Assert.ThrowsAny<ArgumentException>(() => _handler.CreateToken(configuration));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-60)]
+    public void GivenALifetimeThatIsNotPositive_WhenCreatingAToken_ThenItThrows(double expirationInSeconds)
+    {
+        // The parameterless JwtConfiguration() has an expiration of 0.
+        var configuration = Configuration(new Dictionary<string, string> { ["id"] = "1" }) with
+        {
+            ExpirationInSeconds = expirationInSeconds
+        };
+
+        Assert.ThrowsAny<ArgumentException>(() => _handler.CreateToken(configuration));
+    }
+
     [Fact]
     public void GivenASecretShorterThan32Bytes_WhenCreatingAToken_ThenItThrows()
     {

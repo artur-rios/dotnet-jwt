@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   as `FakeTimeProvider`, to pin when a token starts or let it expire without waiting. `new JwtHandler()` reads the
   system clock, as before.
 
+### Fixed
+
+- `JwtHandler.CreateToken` documents the `ArgumentException` it throws for a blank secret or one shorter than 32
+  bytes, and for an `ExpirationInSeconds` of zero or less, as the parameterless `JwtConfiguration()` has. Only its
+  `InvalidOperationException` was documented.
+
 ## [1.4.2] - 2026-11-14
 
 ### Changed

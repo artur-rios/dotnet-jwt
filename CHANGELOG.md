@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-19
+
 ### Added
 
 - `JwtHandler(TimeProvider)`: a handler that reads the time from the given clock, to issue tokens (`nbf`, `iat`,
@@ -120,7 +122,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `JwtHandler` to create HMAC-SHA256 signed tokens, validate them against a secret, and read the user id from a
   token's `id` claim.
 
-[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.2...HEAD
+[Unreleased]: https://github.com/artur-rios/dotnet-jwt/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.2...1.5.0
 [1.4.2]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.1...1.4.2
 [1.4.1]: https://github.com/artur-rios/dotnet-jwt/compare/1.4.0...1.4.1
 [1.4.0]: https://github.com/artur-rios/dotnet-jwt/compare/1.3.0...1.4.0
